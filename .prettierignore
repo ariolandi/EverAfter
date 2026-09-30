@@ -1,0 +1,5 @@
+dist
+dist-server
+drizzle
+node_modules
+package-lock.json

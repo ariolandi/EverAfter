@@ -1,204 +1,121 @@
-import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
-import './App.css'
+import { useEffect, useState } from 'react';
+import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
+import { Alert, AppBar, Avatar, Box, Button, Container, Paper, Stack, Toolbar, Typography, useTheme } from '@mui/material';
+import type { PublishedForm, User } from '../shared/types';
+import { api } from './api';
+import Builder from './builder/Builder';
+import Sidebar from './builder/Sidebar';
 
-type Task = {
-  id: number
-  title: string
-  completed: boolean
-  createdAt: string
-}
-
-type Filter = 'all' | 'active' | 'completed'
-
-async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-  })
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => null)
-    throw new Error(body?.error ?? `Request failed (${response.status})`)
-  }
-
-  if (response.status === 204) return undefined as T
-  return response.json() as Promise<T>
-}
-
-function App() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [title, setTitle] = useState('')
-  const [filter, setFilter] = useState<Filter>('all')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
+export default function App() {
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [events, setEvents] = useState<PublishedForm[]>([]);
+  // Bumping this remounts the builder with empty state for a new event.
+  const [builderKey, setBuilderKey] = useState(0);
+  const { palette } = useTheme();
 
   useEffect(() => {
-    const controller = new AbortController()
-
-    api<Task[]>('/api/tasks', { signal: controller.signal })
-      .then(setTasks)
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted) {
-          setError(reason instanceof Error ? reason.message : 'Could not load tasks')
-        }
+    Promise.all([api.authConfig(), api.me()])
+      .then(([config, me]) => {
+        setClientId(config.googleClientId);
+        setUser(me);
       })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
 
-    return () => controller.abort()
-  }, [])
+  useEffect(() => {
+    if (!user) return;
+    api.listForms()
+      .then(setEvents)
+      .catch((e: Error) => setError(e.message));
+  }, [user]);
 
-  const remaining = tasks.filter((task) => !task.completed).length
-  const visibleTasks = tasks.filter((task) => {
-    if (filter === 'active') return !task.completed
-    if (filter === 'completed') return task.completed
-    return true
-  })
-
-  async function addTask(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const cleanTitle = title.trim()
-    if (!cleanTitle) return
-
-    setSaving(true)
-    setError('')
+  async function handleCredential(credential: string | undefined) {
+    if (!credential) {
+      setError('Google did not return a credential');
+      return;
+    }
     try {
-      const task = await api<Task>('/api/tasks', {
-        method: 'POST',
-        body: JSON.stringify({ title: cleanTitle }),
-      })
-      setTasks((current) => [task, ...current])
-      setTitle('')
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not add task')
-    } finally {
-      setSaving(false)
+      setUser(await api.loginWithGoogle(credential));
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
     }
   }
 
-  async function toggleTask(task: Task) {
-    setError('')
-    try {
-      const updated = await api<Task>(`/api/tasks/${task.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ completed: !task.completed }),
-      })
-      setTasks((current) => current.map((item) => item.id === task.id ? updated : item))
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not update task')
-    }
+  async function logout() {
+    await api.logout();
+    setUser(null);
   }
 
-  async function removeTask(id: number) {
-    setError('')
-    try {
-      await api<void>(`/api/tasks/${id}`, { method: 'DELETE' })
-      setTasks((current) => current.filter((task) => task.id !== id))
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not delete task')
-    }
-  }
+  if (loading) return null;
 
   return (
-    <main className="shell">
-      <header className="topbar">
-        <a className="wordmark" href="/" aria-label="EverAfter home">
-          <span className="wordmark-mark">e</span> everafter
-        </a>
-        <span className="topbar-note">A quieter kind of checklist</span>
-      </header>
+    <>
+      <AppBar position="static">
+        <Toolbar>
+          <Typography variant="h4" component="h1" color="primary.dark" sx={{ flexGrow: 1 }}>
+            EverAfter
+          </Typography>
+          {user && (
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+              {user.picture && (
+                <Avatar src={user.picture} alt="" slotProps={{ img: { referrerPolicy: 'no-referrer' } }} sx={{ width: 32, height: 32 }} />
+              )}
+              <Typography>{user.name}</Typography>
+              <Button variant="outlined" size="small" onClick={logout}>
+                Sign out
+              </Button>
+            </Stack>
+          )}
+        </Toolbar>
+      </AppBar>
 
-      <section className="workspace" aria-labelledby="page-title">
-        <div className="intro">
-          <p className="eyebrow">YOUR SPACE, YOUR PACE</p>
-          <h1 id="page-title">Make room for<br />what matters.</h1>
-          <p className="intro-copy">A small place to gather the things you want to get done.</p>
-          <div className="daily-count" aria-live="polite">
-            <span className="count-number">{remaining.toString().padStart(2, '0')}</span>
-            <span>{remaining === 1 ? 'thing' : 'things'} left to do</span>
-          </div>
-        </div>
+      <Container maxWidth={user ? false : 'sm'} sx={{ py: 5 }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
-        <div className="task-panel">
-          <form className="add-form" onSubmit={addTask}>
-            <label className="sr-only" htmlFor="new-task">Add a task</label>
-            <input
-              id="new-task"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Something on your mind..."
-              maxLength={240}
-            />
-            <button className="add-button" type="submit" disabled={saving || !title.trim()}>
-              {saving ? 'Adding...' : 'Add task'}
-            </button>
-          </form>
-
-          <div className="list-toolbar">
-            <h2>Your list <span>{tasks.length}</span></h2>
-            <div className="filters" aria-label="Filter tasks">
-              {(['all', 'active', 'completed'] as const).map((value) => (
-                <button
-                  className={filter === value ? 'filter-button selected' : 'filter-button'}
-                  key={value}
-                  onClick={() => setFilter(value)}
-                  type="button"
-                  aria-pressed={filter === value}
-                >
-                  {value === 'all' ? 'All' : value === 'active' ? 'To do' : 'Done'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {error && <p className="error-message" role="alert">{error}</p>}
-
-          <ul className="task-list" aria-live="polite">
-            {loading ? (
-              <li className="empty-state">Gathering your list...</li>
-            ) : visibleTasks.length > 0 ? visibleTasks.map((task) => (
-              <li className={task.completed ? 'task-item completed' : 'task-item'} key={task.id}>
-                <label className="task-label">
-                  <input
-                    checked={task.completed}
-                    onChange={() => void toggleTask(task)}
-                    type="checkbox"
+        {user ? (
+          <Box sx={{ display: 'flex', gap: 4, height: '80vh' }}>
+            <Sidebar events={events} onNewEvent={() => setBuilderKey((key) => key + 1)} />
+            <Box sx={{
+              backgroundColor: 'background.paper',
+              flexGrow: 1,
+              minWidth: 0,
+              overflow: 'auto',
+              padding: 8,
+              border: `2px solid ${palette.primary.main}`,
+              outline: `2px solid ${palette.primary.main}`,
+              outlineOffset: '-8px',
+            }}>
+              <Builder key={builderKey} onPublished={(form) => setEvents((current) => [form, ...current])} />
+            </Box>
+          </Box>
+        ) : clientId ? (
+          <GoogleOAuthProvider clientId={clientId}>
+            <Paper sx={{ p: 4 }}>
+              <Stack spacing={2} sx={{ alignItems: 'center' }}>
+                <Typography variant="h5">Welcome</Typography>
+                <Typography color="text.secondary">Sign in to see your dashboard.</Typography>
+                <Box>
+                  <GoogleLogin
+                    onSuccess={(res) => handleCredential(res.credential)}
+                    onError={() => setError('Google sign-in failed')}
                   />
-                  <span className="checkmark" aria-hidden="true" />
-                  <span className="task-title">{task.title}</span>
-                </label>
-                <button
-                  aria-label={`Delete ${task.title}`}
-                  className="delete-button"
-                  onClick={() => void removeTask(task.id)}
-                  type="button"
-                >
-                  Delete
-                </button>
-              </li>
-            )) : (
-              <li className="empty-state">
-                {tasks.length === 0 ? 'Your list is clear. Add a task to begin.' : 'Nothing in this view.'}
-              </li>
-            )}
-          </ul>
-
-          <footer className="list-footer">
-            <span>Saved on this device</span>
-            <span className="storage-indicator"><i /> SQLite</span>
-          </footer>
-        </div>
-      </section>
-
-      <footer className="page-footer">
-        <span>EVERAFTER</span>
-        <span>One thing at a time.</span>
-      </footer>
-    </main>
-  )
+                </Box>
+              </Stack>
+            </Paper>
+          </GoogleOAuthProvider>
+        ) : (
+          <Alert severity="error">Google login is not configured. Set GOOGLE_CLIENT_ID in .env.</Alert>
+        )}
+      </Container>
+    </>
+  );
 }
-
-export default App

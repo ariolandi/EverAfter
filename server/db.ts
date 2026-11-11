@@ -1,8 +1,17 @@
 import { and, desc, eq, gt, lte } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import type { InvitationDetails, FormFields, GeneratedImage, PublishedForm, Task, User } from '../shared/types.js';
-import { formResponses, forms, images, sessions, tasks, users } from './schema.js';
+import type {
+  EventInfo,
+  FormFields,
+  GeneratedImage,
+  Guest,
+  InvitationDetails,
+  PublishedForm,
+  Task,
+  User,
+} from '../shared/types.js';
+import { events, formResponses, forms, guests, images, sessions, tasks, users } from './schema.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -36,6 +45,7 @@ const toImage = (row: { id: number; prompt: string; createdAt: Date }): Generate
 
 const toForm = (row: typeof forms.$inferSelect): PublishedForm => ({
   slug: row.slug,
+  imageId: row.imageId,
   showName: row.showName,
   showAnswer: row.showAnswer,
   brideName: row.brideName,
@@ -44,6 +54,30 @@ const toForm = (row: typeof forms.$inferSelect): PublishedForm => ({
   place: row.place,
   colors: row.colors,
   imageUrl: row.imageId === null ? null : `/api/forms/${row.slug}/image`,
+});
+
+const eventSelection = {
+  event: events,
+  form: forms,
+  guestCount: db.$count(guests, eq(guests.eventId, events.id)),
+};
+
+const toEvent = (row: {
+  event: typeof events.$inferSelect;
+  form: typeof forms.$inferSelect | null;
+  guestCount: number;
+}): EventInfo => ({
+  id: row.event.id,
+  name: row.event.name,
+  createdAt: row.event.createdAt.toISOString(),
+  guestCount: row.guestCount,
+  invitation: row.form && toForm(row.form),
+});
+
+const toGuest = (row: typeof guests.$inferSelect): Guest => ({
+  id: row.id,
+  name: row.name,
+  createdAt: row.createdAt.toISOString(),
 });
 
 export async function upsertGoogleUser(
@@ -144,8 +178,60 @@ export async function deleteImage(userId: number, id: number): Promise<boolean> 
   return deleted.length > 0;
 }
 
+export async function listEvents(userId: number): Promise<EventInfo[]> {
+  const rows = await db
+    .select(eventSelection)
+    .from(events)
+    .leftJoin(forms, eq(forms.eventId, events.id))
+    .where(eq(events.userId, userId))
+    .orderBy(desc(events.createdAt), desc(events.id));
+  return rows.map(toEvent);
+}
+
+export async function getEvent(userId: number, id: number): Promise<EventInfo | undefined> {
+  const [row] = await db
+    .select(eventSelection)
+    .from(events)
+    .leftJoin(forms, eq(forms.eventId, events.id))
+    .where(and(eq(events.id, id), eq(events.userId, userId)));
+  return row && toEvent(row);
+}
+
+export async function createEvent(userId: number, name: string): Promise<EventInfo> {
+  const [row] = await db.insert(events).values({ userId, name }).returning();
+  return toEvent({ event: row, form: null, guestCount: 0 });
+}
+
+export async function deleteEvent(userId: number, id: number): Promise<boolean> {
+  const deleted = await db
+    .delete(events)
+    .where(and(eq(events.id, id), eq(events.userId, userId)))
+    .returning({ id: events.id });
+  return deleted.length > 0;
+}
+
+// Guest queries take an event id the caller has already checked belongs to the signed-in user.
+export async function listGuests(eventId: number): Promise<Guest[]> {
+  const rows = await db.select().from(guests).where(eq(guests.eventId, eventId)).orderBy(guests.name, guests.id);
+  return rows.map(toGuest);
+}
+
+export async function createGuest(eventId: number, name: string): Promise<Guest> {
+  const [row] = await db.insert(guests).values({ eventId, name }).returning();
+  return toGuest(row);
+}
+
+export async function deleteGuest(eventId: number, id: number): Promise<boolean> {
+  const deleted = await db
+    .delete(guests)
+    .where(and(eq(guests.id, id), eq(guests.eventId, eventId)))
+    .returning({ id: guests.id });
+  return deleted.length > 0;
+}
+
 export async function createForm(
   userId: number,
+  eventId: number,
   slug: string,
   imageId: number | null,
   fields: FormFields,
@@ -153,18 +239,32 @@ export async function createForm(
 ): Promise<PublishedForm> {
   const [row] = await db
     .insert(forms)
-    .values({ userId, slug, imageId, ...fields, ...details })
+    .values({ userId, eventId, slug, imageId, ...fields, ...details })
     .returning();
   return toForm(row);
 }
 
-export async function listForms(userId: number): Promise<PublishedForm[]> {
-  const rows = await db
-    .select()
-    .from(forms)
-    .where(eq(forms.userId, userId))
-    .orderBy(desc(forms.createdAt), desc(forms.id));
-  return rows.map(toForm);
+export async function updateForm(
+  userId: number,
+  slug: string,
+  imageId: number | null,
+  fields: FormFields,
+  details: InvitationDetails,
+): Promise<PublishedForm | undefined> {
+  const [row] = await db
+    .update(forms)
+    .set({ imageId, ...fields, ...details })
+    .where(and(eq(forms.slug, slug), eq(forms.userId, userId)))
+    .returning();
+  return row && toForm(row);
+}
+
+export async function deleteForm(userId: number, slug: string): Promise<boolean> {
+  const deleted = await db
+    .delete(forms)
+    .where(and(eq(forms.slug, slug), eq(forms.userId, userId)))
+    .returning({ id: forms.id });
+  return deleted.length > 0;
 }
 
 export async function getForm(slug: string): Promise<{ id: number; form: PublishedForm } | undefined> {

@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 import { Alert, AppBar, Avatar, Box, Button, Container, Paper, Stack, Toolbar, Typography, useTheme } from '@mui/material';
-import type { PublishedForm, User } from '../shared/types';
+import type { User } from '../shared/types';
 import { api } from './api';
 import Builder from './builder/Builder';
-import Sidebar from './builder/Sidebar';
+import EventList from './events/EventList';
+import EventPage from './events/EventPage';
+
+/** Which screen is shown: the event list (null), an event, or that event's invitation builder. */
+type View = { eventId: number; building: boolean } | null;
 
 export default function App() {
   const [clientId, setClientId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [events, setEvents] = useState<PublishedForm[]>([]);
-  // Bumping this remounts the builder with empty state for a new event.
-  const [builderKey, setBuilderKey] = useState(0);
+  const [view, setView] = useState<View>(null);
   const { palette } = useTheme();
 
   useEffect(() => {
@@ -25,13 +27,6 @@ export default function App() {
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    api.listForms()
-      .then(setEvents)
-      .catch((e: Error) => setError(e.message));
-  }, [user]);
 
   async function handleCredential(credential: string | undefined) {
     if (!credential) {
@@ -49,6 +44,7 @@ export default function App() {
   async function logout() {
     await api.logout();
     setUser(null);
+    setView(null);
   }
 
   if (loading) return null;
@@ -82,20 +78,26 @@ export default function App() {
         )}
 
         {user ? (
-          <Box sx={{ display: 'flex', gap: 4, height: '80vh' }}>
-            <Sidebar events={events} onNewEvent={() => setBuilderKey((key) => key + 1)} />
-            <Box sx={{
-              backgroundColor: 'background.paper',
-              flexGrow: 1,
-              minWidth: 0,
-              overflow: 'auto',
-              padding: 8,
-              border: `2px solid ${palette.primary.main}`,
-              outline: `2px solid ${palette.primary.main}`,
-              outlineOffset: '-8px',
-            }}>
-              <Builder key={builderKey} onPublished={(form) => setEvents((current) => [form, ...current])} />
-            </Box>
+          <Box sx={{
+            backgroundColor: 'background.paper',
+            height: '80vh',
+            overflow: 'auto',
+            padding: 8,
+            border: `2px solid ${palette.primary.main}`,
+            outline: `2px solid ${palette.primary.main}`,
+            outlineOffset: '-8px',
+          }}>
+            {view === null ? (
+              <EventList onOpen={(eventId) => setView({ eventId, building: false })} />
+            ) : view.building ? (
+              <Builder eventId={view.eventId} onBack={() => setView({ eventId: view.eventId, building: false })} />
+            ) : (
+              <EventPage
+                eventId={view.eventId}
+                onBack={() => setView(null)}
+                onEditInvitation={() => setView({ eventId: view.eventId, building: true })}
+              />
+            )}
           </Box>
         ) : clientId ? (
           <GoogleOAuthProvider clientId={clientId}>

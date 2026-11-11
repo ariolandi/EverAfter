@@ -1,8 +1,20 @@
 import { HttpStatus } from '../shared/httpStatus';
-import type { InvitationDetails, FormFields, FormResponseInput, GeneratedImage, PublishedForm, Task, User } from '../shared/types';
+import type {
+  EventInfo,
+  FormFields,
+  FormResponseInput,
+  GeneratedImage,
+  Guest,
+  InvitationDetails,
+  PublishedForm,
+  Task,
+  User,
+} from '../shared/types';
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
+    // API data must always come from the server, never a stale HTTP cache entry.
+    cache: 'no-store',
     ...init,
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
@@ -32,12 +44,28 @@ export const api = {
     request<GeneratedImage>('/api/images', { method: 'POST', body: JSON.stringify({ prompt }) }),
   deleteImage: (id: number) => request<void>(`/api/images/${id}`, { method: 'DELETE' }),
 
-  listForms: () => request<PublishedForm[]>('/api/forms'),
-  publishForm: (imageId: number | null, fields: FormFields, details: InvitationDetails) =>
+  listEvents: () => request<EventInfo[]>('/api/events'),
+  getEvent: (id: number) => request<EventInfo>(`/api/events/${id}`),
+  createEvent: (name: string) =>
+    request<EventInfo>('/api/events', { method: 'POST', body: JSON.stringify({ name }) }),
+  deleteEvent: (id: number) => request<void>(`/api/events/${id}`, { method: 'DELETE' }),
+  listGuests: (eventId: number) => request<Guest[]>(`/api/events/${eventId}/guests`),
+  addGuest: (eventId: number, name: string) =>
+    request<Guest>(`/api/events/${eventId}/guests`, { method: 'POST', body: JSON.stringify({ name }) }),
+  deleteGuest: (eventId: number, id: number) =>
+    request<void>(`/api/events/${eventId}/guests/${id}`, { method: 'DELETE' }),
+
+  publishForm: (eventId: number, imageId: number | null, fields: FormFields, details: InvitationDetails) =>
     request<PublishedForm>('/api/forms', {
       method: 'POST',
+      body: JSON.stringify({ eventId, imageId, ...fields, ...details }),
+    }),
+  updateForm: (slug: string, imageId: number | null, fields: FormFields, details: InvitationDetails) =>
+    request<PublishedForm>(`/api/forms/${encodeURIComponent(slug)}`, {
+      method: 'PUT',
       body: JSON.stringify({ imageId, ...fields, ...details }),
     }),
+  deleteForm: (slug: string) => request<void>(`/api/forms/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
   getForm: (slug: string) => request<PublishedForm>(`/api/forms/${encodeURIComponent(slug)}`),
   submitFormResponse: (slug: string, response: FormResponseInput) =>
     request<void>(`/api/forms/${encodeURIComponent(slug)}/responses`, {

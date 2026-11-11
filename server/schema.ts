@@ -50,11 +50,42 @@ export const images = pgTable(
   (t) => [index('images_user_id').on(t.userId)],
 );
 
+export const events = pgTable(
+  'events',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('events_user_id').on(t.userId)],
+);
+
+export const guests = pgTable(
+  'guests',
+  {
+    id: serial('id').primaryKey(),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('guests_event_id').on(t.eventId)],
+);
+
 export const forms = pgTable('forms', {
   id: serial('id').primaryKey(),
   userId: integer('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  // Each event has at most one invitation.
+  eventId: integer('event_id')
+    .notNull()
+    .unique()
+    .references(() => events.id, { onDelete: 'cascade' }),
   slug: text('slug').notNull().unique(),
   imageId: integer('image_id').references(() => images.id, { onDelete: 'set null' }),
   showName: boolean('show_name').notNull(),

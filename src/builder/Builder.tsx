@@ -5,28 +5,29 @@ import {
     Button,
     CircularProgress,
     Divider,
-    IconButton,
-    InputAdornment,
+    Snackbar,
     Stack,
     Step,
-    StepLabel,
+    StepButton,
     Stepper,
     TextField,
     Typography,
 } from '@mui/material';
-import type { InvitationDetails, FormFields, GeneratedImage, PublishedForm } from '../../shared/types';
+import type { InvitationDetails, FormFields, GeneratedImage } from '../../shared/types';
 import { api } from '../api';
 import InvitationForm from '../form/InvitationForm';
 import MainInfo from './pages/MainInfo';
-import { ContentCopy } from '@mui/icons-material';
+import { ArrowBack } from '@mui/icons-material';
 
 const STEPS = ['Основна информация', 'Изображение'];
 
 interface BuilderProps {
-    onPublished: (form: PublishedForm) => void;
+    /** The event whose invitation is created, or edited if it already has one. */
+    eventId: number;
+    onBack: () => void;
 }
 
-export default function Builder({ onPublished }: BuilderProps) {
+export default function Builder({ eventId, onBack }: BuilderProps) {
     const [activeStep, setActiveStep] = useState(0);
     const [images, setImages] = useState<GeneratedImage[]>([]);
     const [prompt, setPrompt] = useState('');
@@ -41,29 +42,53 @@ export default function Builder({ onPublished }: BuilderProps) {
         place: '',
         colors: ['#ffffff'],
     });
-    const [publishing, setPublishing] = useState(false);
-    const [shareUrl, setShareUrl] = useState<string | null>(null);
-    const selected = images.find((image) => image.id === selectedId) ?? images[0];
+    const [loaded, setLoaded] = useState(false);
+    // Slug of the event's saved invitation; null until it is first saved.
+    const [slug, setSlug] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [savedNotice, setSavedNotice] = useState(false);
+    // A new invitation defaults to the latest image; a saved one keeps exactly the image it was saved with.
+    const selected = images.find((image) => image.id === selectedId) ?? (slug ? undefined : images[0]);
 
-    const publish = async () => {
-        setPublishing(true);
+    const save = async () => {
+        setSaving(true);
         setError(null);
         try {
-            const form = await api.publishForm(selected?.id ?? null, fields, details);
-            setShareUrl(`${window.location.origin}/f/${form.slug}`);
-            onPublished(form);
+            const imageId = selected?.id ?? null;
+            const form = slug
+                ? await api.updateForm(slug, imageId, fields, details)
+                : await api.publishForm(eventId, imageId, fields, details);
+            setSlug(form.slug);
+            setSelectedId(form.imageId);
+            setSavedNotice(true);
         } catch (e) {
             setError((e as Error).message);
         } finally {
-            setPublishing(false);
+            setSaving(false);
         }
     };
 
     useEffect(() => {
-        api.listImages()
-            .then(setImages)
+        Promise.all([api.listImages(), api.getEvent(eventId)])
+            .then(([loadedImages, event]) => {
+                setImages(loadedImages);
+                const { invitation } = event;
+                if (invitation) {
+                    setSlug(invitation.slug);
+                    setSelectedId(invitation.imageId);
+                    setFields({ showName: invitation.showName, showAnswer: invitation.showAnswer });
+                    setDetails({
+                        brideName: invitation.brideName,
+                        groomName: invitation.groomName,
+                        weddingDate: invitation.weddingDate,
+                        place: invitation.place,
+                        colors: invitation.colors,
+                    });
+                }
+                setLoaded(true);
+            })
             .catch((e: Error) => setError(e.message));
-    }, []);
+    }, [eventId]);
 
     const generate = async (event?: FormEvent) => {
         event?.preventDefault();
@@ -97,6 +122,8 @@ export default function Builder({ onPublished }: BuilderProps) {
             details.colors.length > 0,
     )
 
+    if (!loaded) return error ? <Alert severity="error">{error}</Alert> : null;
+
     return (
         <Box
             sx={{
@@ -107,12 +134,17 @@ export default function Builder({ onPublished }: BuilderProps) {
             }}
         >
             <Stack spacing={3} sx={{ minWidth: 0, overflowY: { md: 'auto' } }}>
-                <Typography variant="h4">Създай своята покана</Typography>
+                <Box>
+                    <Button startIcon={<ArrowBack />} onClick={onBack}>
+                        Към събитието
+                    </Button>
+                </Box>
+                <Typography variant="h4">{slug ? 'Редактирай поканата' : 'Създай своята покана'}</Typography>
 
-                <Stepper activeStep={activeStep}>
-                    {STEPS.map((label) => (
+                <Stepper nonLinear activeStep={activeStep}>
+                    {STEPS.map((label, index) => (
                         <Step key={label}>
-                            <StepLabel>{label}</StepLabel>
+                            <StepButton onClick={() => setActiveStep(index)}>{label}</StepButton>
                         </Step>
                     ))}
                 </Stepper>
@@ -123,10 +155,6 @@ export default function Builder({ onPublished }: BuilderProps) {
                         setDetails={setDetails}
                         fields={fields}
                         setFields={setFields}
-                        publishing={publishing}
-                        publish={publish}
-                        shareUrl={shareUrl}
-                        error={error}
                     />
                 )}
 
@@ -159,7 +187,6 @@ export default function Builder({ onPublished }: BuilderProps) {
                                 {generating ? 'Generating…' : 'Generate'}
                             </Button>
                         </Stack>
-                        {error && <Alert severity="error">{error}</Alert>}
                     </Stack>
                 )}
 
@@ -178,38 +205,20 @@ export default function Builder({ onPublished }: BuilderProps) {
                     <Box>
                         <Button
                             variant="outlined"
-                            onClick={publish}
-                            disabled={publishing || !detailsComplete || (!fields.showName && !fields.showAnswer)}
+                            onClick={save}
+                            disabled={saving || !detailsComplete || (!fields.showName && !fields.showAnswer)}
                         >
-                            {publishing ? 'Publishing…' : 'Publish & get link'}
+                            {saving ? 'Запазване…' : 'Запази'}
                         </Button>
                     </Box>
-                    {shareUrl && (
-                        <TextField
-                            label="Share link"
-                            value={shareUrl}
-                            size="small"
-                            fullWidth
-                            slotProps={{
-                                htmlInput: { readOnly: true },
-                                input: {
-                                    endAdornment: (
-                                        <InputAdornment position="end">
-                                            <IconButton
-                                                aria-label="Copy link"
-                                                edge="end"
-                                                onClick={() => void navigator.clipboard.writeText(shareUrl)}
-                                            >
-                                                <ContentCopy fontSize="small" />
-                                            </IconButton>
-                                        </InputAdornment>
-                                    ),
-                                },
-                            }}
-                        />
-                    )}
-                    {error && <Alert severity="error">{error}</Alert>}
                 </Stack>
+                {error && <Alert severity="error">{error}</Alert>}
+                <Snackbar
+                    open={savedNotice}
+                    autoHideDuration={3000}
+                    onClose={() => setSavedNotice(false)}
+                    message="Поканата е запазена"
+                />
             </Stack>
 
             <Divider
@@ -245,7 +254,13 @@ export default function Builder({ onPublished }: BuilderProps) {
                             zIndex: 1,
                         }}
                     />
-                    <InvitationForm fields={fields} details={details} imageUrl={selected?.url ?? null} />
+                    <InvitationForm
+                        fields={fields}
+                        details={details}
+                        imageUrl={selected?.url ?? null}
+                        page={activeStep}
+                        onPageChange={setActiveStep}
+                    />
                 </Box>
             </Box>
         </Box>

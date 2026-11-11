@@ -8,10 +8,6 @@ interface MainInfoProps {
     setDetails: Dispatch<SetStateAction<InvitationDetails>>
     fields: FormFields
     setFields: Dispatch<SetStateAction<FormFields>>
-    publishing: boolean
-    publish: () => void
-    shareUrl: string | null
-    error: string | null
 }
 
 export default function MainInfo({ details, setDetails }: MainInfoProps) {

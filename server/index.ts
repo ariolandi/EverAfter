@@ -5,6 +5,7 @@ import express from 'express';
 import { HttpStatus } from '../shared/httpStatus.js';
 import { authRouter, loadUser, requireUser } from './auth.js';
 import { createTask, deleteTask, listTasks, migrateDatabase, setTaskCompleted } from './db.js';
+import { eventRouter } from './events.js';
 import { formRouter } from './forms.js';
 import { imageRouter } from './images.js';
 
@@ -60,6 +61,7 @@ app.delete('/api/tasks/:id', async (req, res) => {
   res.status(HttpStatus.NO_CONTENT).end();
 });
 
+app.use('/api/events', eventRouter);
 app.use('/api/images', imageRouter);
 app.use('/api/forms', formRouter);
 

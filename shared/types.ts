@@ -40,7 +40,23 @@ export const MAX_COLORS = 10;
 
 export interface PublishedForm extends FormFields, InvitationDetails {
   slug: string;
+  imageId: number | null;
   imageUrl: string | null;
+}
+
+export interface EventInfo {
+  id: number;
+  name: string;
+  createdAt: string;
+  guestCount: number;
+  /** The event's published invitation, or null when none has been created yet. */
+  invitation: PublishedForm | null;
+}
+
+export interface Guest {
+  id: number;
+  name: string;
+  createdAt: string;
 }
 
 export interface FormResponseInput {

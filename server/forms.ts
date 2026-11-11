@@ -1,21 +1,32 @@
 import crypto from 'node:crypto';
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { HttpStatus } from '../shared/httpStatus.js';
-import { MAX_COLORS } from '../shared/types.js';
+import { MAX_COLORS, type FormFields, type InvitationDetails } from '../shared/types.js';
 import { requireUser } from './auth.js';
-import { createForm, createFormResponse, getForm, getFormImage, getImageFile, listForms } from './db.js';
+import {
+  createForm,
+  createFormResponse,
+  deleteForm,
+  getEvent,
+  getForm,
+  getFormImage,
+  getImageFile,
+  updateForm,
+} from './db.js';
 
 const MAX_NAME_LENGTH = 100;
 const MAX_PLACE_LENGTH = 200;
 
 export const formRouter = Router();
 
-formRouter.get('/', requireUser, async (req, res) => {
-  res.json(await listForms(req.user!.id));
-});
+interface FormInput {
+  imageId: number | null;
+  fields: FormFields;
+  details: InvitationDetails;
+}
 
-// Publishing needs a signed-in builder; viewing and answering a form is public by slug.
-formRouter.post('/', requireUser, async (req, res) => {
+/** Validates an invitation body, or responds 400 and returns undefined. */
+async function parseFormInput<P>(req: Request<P>, res: Response): Promise<FormInput | undefined> {
   const { imageId, showName, showAnswer } = req.body ?? {};
   const brideName = typeof req.body?.brideName === 'string' ? req.body.brideName.trim() : '';
   const groomName = typeof req.body?.groomName === 'string' ? req.body.groomName.trim() : '';
@@ -47,20 +58,54 @@ formRouter.post('/', requireUser, async (req, res) => {
     res.status(HttpStatus.BAD_REQUEST).json({ error: `colors must be 1-${MAX_COLORS} #rrggbb values` });
     return;
   }
-  if (imageId !== null &&!(Number.isInteger(imageId) && (await getImageFile(req.user!.id, imageId)))) {
+  if (imageId !== null && !(Number.isInteger(imageId) && (await getImageFile(req.user!.id, imageId)))) {
     res.status(HttpStatus.BAD_REQUEST).json({ error: 'image not found' });
     return;
   }
+  return {
+    imageId,
+    fields: { showName, showAnswer },
+    details: { brideName, groomName, weddingDate, place, colors: colors as string[] },
+  };
+}
+
+// Saving needs a signed-in builder; viewing and answering a form is public by slug.
+formRouter.post('/', requireUser, async (req, res) => {
+  const { eventId } = req.body ?? {};
+  const event = Number.isInteger(eventId) ? await getEvent(req.user!.id, eventId) : undefined;
+  if (!event) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: 'event not found' });
+    return;
+  }
+  if (event.invitation) {
+    res.status(HttpStatus.CONFLICT).json({ error: 'this event already has an invitation' });
+    return;
+  }
+  const input = await parseFormInput(req, res);
+  if (!input) return;
   const slug = crypto.randomBytes(9).toString('base64url');
-  res.status(HttpStatus.CREATED).json(
-    await createForm(req.user!.id, slug, imageId, { showName, showAnswer }, {
-      brideName,
-      groomName,
-      weddingDate,
-      place,
-      colors: colors as string[],
-    }),
-  );
+  res
+    .status(HttpStatus.CREATED)
+    .json(await createForm(req.user!.id, event.id, slug, input.imageId, input.fields, input.details));
+});
+
+formRouter.put('/:slug', requireUser, async (req: Request<{ slug: string }>, res) => {
+  const input = await parseFormInput(req, res);
+  if (!input) return;
+  const form = await updateForm(req.user!.id, req.params.slug, input.imageId, input.fields, input.details);
+  if (!form) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'form not found' });
+    return;
+  }
+  res.json(form);
+});
+
+formRouter.delete('/:slug', requireUser, async (req: Request<{ slug: string }>, res) => {
+  if (!(await deleteForm(req.user!.id, req.params.slug))) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'form not found' });
+    return;
+  }
+  res.status(HttpStatus.NO_CONTENT).end();
 });
 
 formRouter.get('/:slug', async (req, res) => {

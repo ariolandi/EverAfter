@@ -1,7 +1,8 @@
-import { and, desc, eq, gt, lte } from 'drizzle-orm';
+import { and, desc, eq, exists, gt, inArray, lte, or, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import type {
+  Coowner,
   EventInfo,
   FormFields,
   GeneratedImage,
@@ -11,7 +12,7 @@ import type {
   Task,
   User,
 } from '../shared/types.js';
-import { events, formResponses, forms, guests, images, sessions, tasks, users } from './schema.js';
+import { eventCoowners, events, formResponses, forms, guests, images, sessions, tasks, users } from './schema.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -56,22 +57,49 @@ const toForm = (row: typeof forms.$inferSelect): PublishedForm => ({
   imageUrl: row.imageId === null ? null : `/api/forms/${row.slug}/image`,
 });
 
+/** Who is asking: event access depends on both their id (owner) and their email (co-owner invites). */
+type Viewer = Pick<User, 'id' | 'email'>;
+
+/** Co-owner invites are matched case-insensitively, so emails are stored and compared lowercased. */
+export const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+/** SQL condition: the viewer owns the event in the current row, or was invited as its co-owner. */
+const canAccessEvent = (viewer: Viewer) =>
+  or(
+    eq(events.userId, viewer.id),
+    exists(
+      db
+        .select({ id: eventCoowners.id })
+        .from(eventCoowners)
+        .where(and(eq(eventCoowners.eventId, events.id), eq(eventCoowners.email, normalizeEmail(viewer.email)))),
+    ),
+  );
+
+const accessibleEventIds = (viewer: Viewer) => db.select({ id: events.id }).from(events).where(canAccessEvent(viewer));
+
 const eventSelection = {
   event: events,
   form: forms,
+  ownerName: users.name,
   guestCount: db.$count(guests, eq(guests.eventId, events.id)),
 };
 
-const toEvent = (row: {
-  event: typeof events.$inferSelect;
-  form: typeof forms.$inferSelect | null;
-  guestCount: number;
-}): EventInfo => ({
+const toEvent = (
+  viewer: Viewer,
+  row: {
+    event: typeof events.$inferSelect;
+    form: typeof forms.$inferSelect | null;
+    ownerName: string;
+    guestCount: number;
+  },
+): EventInfo => ({
   id: row.event.id,
   name: row.event.name,
   createdAt: row.event.createdAt.toISOString(),
   guestCount: row.guestCount,
   invitation: row.form && toForm(row.form),
+  isOwner: row.event.userId === viewer.id,
+  ownerName: row.ownerName,
 });
 
 const toGuest = (row: typeof guests.$inferSelect): Guest => ({
@@ -178,28 +206,32 @@ export async function deleteImage(userId: number, id: number): Promise<boolean> 
   return deleted.length > 0;
 }
 
-export async function listEvents(userId: number): Promise<EventInfo[]> {
+/** Events the viewer owns or co-owns. */
+export async function listEvents(viewer: Viewer): Promise<EventInfo[]> {
   const rows = await db
     .select(eventSelection)
     .from(events)
+    .innerJoin(users, eq(users.id, events.userId))
     .leftJoin(forms, eq(forms.eventId, events.id))
-    .where(eq(events.userId, userId))
+    .where(canAccessEvent(viewer))
     .orderBy(desc(events.createdAt), desc(events.id));
-  return rows.map(toEvent);
+  return rows.map((row) => toEvent(viewer, row));
 }
 
-export async function getEvent(userId: number, id: number): Promise<EventInfo | undefined> {
+/** The event if the viewer owns or co-owns it. */
+export async function getEvent(viewer: Viewer, id: number): Promise<EventInfo | undefined> {
   const [row] = await db
     .select(eventSelection)
     .from(events)
+    .innerJoin(users, eq(users.id, events.userId))
     .leftJoin(forms, eq(forms.eventId, events.id))
-    .where(and(eq(events.id, id), eq(events.userId, userId)));
-  return row && toEvent(row);
+    .where(and(eq(events.id, id), canAccessEvent(viewer)));
+  return row && toEvent(viewer, row);
 }
 
-export async function createEvent(userId: number, name: string): Promise<EventInfo> {
-  const [row] = await db.insert(events).values({ userId, name }).returning();
-  return toEvent({ event: row, form: null, guestCount: 0 });
+export async function createEvent(owner: User, name: string): Promise<EventInfo> {
+  const [row] = await db.insert(events).values({ userId: owner.id, name }).returning();
+  return toEvent(owner, { event: row, form: null, ownerName: owner.name, guestCount: 0 });
 }
 
 export async function deleteEvent(userId: number, id: number): Promise<boolean> {
@@ -210,7 +242,46 @@ export async function deleteEvent(userId: number, id: number): Promise<boolean> 
   return deleted.length > 0;
 }
 
-// Guest queries take an event id the caller has already checked belongs to the signed-in user.
+// Co-owner and guest queries take an event id the caller has already checked the signed-in user may manage.
+export async function listCoowners(eventId: number): Promise<Coowner[]> {
+  const rows = await db
+    .select({
+      id: eventCoowners.id,
+      email: eventCoowners.email,
+      createdAt: eventCoowners.createdAt,
+      name: sql<string | null>`(select ${users.name} from ${users} where lower(${users.email}) = ${eventCoowners.email} limit 1)`,
+    })
+    .from(eventCoowners)
+    .where(eq(eventCoowners.eventId, eventId))
+    .orderBy(eventCoowners.createdAt, eventCoowners.id);
+  return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+}
+
+/** Invites a co-owner; resolves to undefined if that email is already invited to the event. */
+export async function addCoowner(eventId: number, email: string): Promise<Coowner | undefined> {
+  const normalized = normalizeEmail(email);
+  const [row] = await db
+    .insert(eventCoowners)
+    .values({ eventId, email: normalized })
+    .onConflictDoNothing()
+    .returning();
+  if (!row) return undefined;
+  const [user] = await db
+    .select({ name: users.name })
+    .from(users)
+    .where(eq(sql`lower(${users.email})`, normalized))
+    .limit(1);
+  return { id: row.id, email: row.email, name: user?.name ?? null, createdAt: row.createdAt.toISOString() };
+}
+
+export async function deleteCoowner(eventId: number, id: number): Promise<boolean> {
+  const deleted = await db
+    .delete(eventCoowners)
+    .where(and(eq(eventCoowners.id, id), eq(eventCoowners.eventId, eventId)))
+    .returning({ id: eventCoowners.id });
+  return deleted.length > 0;
+}
+
 export async function listGuests(eventId: number): Promise<Guest[]> {
   const rows = await db.select().from(guests).where(eq(guests.eventId, eventId)).orderBy(guests.name, guests.id);
   return rows.map(toGuest);
@@ -244,8 +315,9 @@ export async function createForm(
   return toForm(row);
 }
 
+// Anyone who can manage the event (owner or co-owner) can edit or delete its invitation.
 export async function updateForm(
-  userId: number,
+  viewer: Viewer,
   slug: string,
   imageId: number | null,
   fields: FormFields,
@@ -254,15 +326,15 @@ export async function updateForm(
   const [row] = await db
     .update(forms)
     .set({ imageId, ...fields, ...details })
-    .where(and(eq(forms.slug, slug), eq(forms.userId, userId)))
+    .where(and(eq(forms.slug, slug), inArray(forms.eventId, accessibleEventIds(viewer))))
     .returning();
   return row && toForm(row);
 }
 
-export async function deleteForm(userId: number, slug: string): Promise<boolean> {
+export async function deleteForm(viewer: Viewer, slug: string): Promise<boolean> {
   const deleted = await db
     .delete(forms)
-    .where(and(eq(forms.slug, slug), eq(forms.userId, userId)))
+    .where(and(eq(forms.slug, slug), inArray(forms.eventId, accessibleEventIds(viewer))))
     .returning({ id: forms.id });
   return deleted.length > 0;
 }

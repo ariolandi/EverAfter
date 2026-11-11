@@ -1,5 +1,6 @@
 import { HttpStatus } from '../shared/httpStatus';
 import type {
+  Coowner,
   EventInfo,
   FormFields,
   FormResponseInput,
@@ -49,6 +50,11 @@ export const api = {
   createEvent: (name: string) =>
     request<EventInfo>('/api/events', { method: 'POST', body: JSON.stringify({ name }) }),
   deleteEvent: (id: number) => request<void>(`/api/events/${id}`, { method: 'DELETE' }),
+  listCoowners: (eventId: number) => request<Coowner[]>(`/api/events/${eventId}/coowners`),
+  addCoowner: (eventId: number, email: string) =>
+    request<Coowner>(`/api/events/${eventId}/coowners`, { method: 'POST', body: JSON.stringify({ email }) }),
+  deleteCoowner: (eventId: number, id: number) =>
+    request<void>(`/api/events/${eventId}/coowners/${id}`, { method: 'DELETE' }),
   listGuests: (eventId: number) => request<Guest[]>(`/api/events/${eventId}/guests`),
   addGuest: (eventId: number, name: string) =>
     request<Guest>(`/api/events/${eventId}/guests`, { method: 'POST', body: JSON.stringify({ name }) }),

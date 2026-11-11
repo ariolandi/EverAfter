@@ -51,6 +51,19 @@ export interface EventInfo {
   guestCount: number;
   /** The event's published invitation, or null when none has been created yet. */
   invitation: PublishedForm | null;
+  /** Whether the signed-in user created the event; co-owners can't delete it or change its co-owners. */
+  isOwner: boolean;
+  /** Who created the event, shown to co-owners. */
+  ownerName: string;
+}
+
+/** Someone invited to manage an event alongside its owner. */
+export interface Coowner {
+  id: number;
+  email: string;
+  /** Their name once they have signed in at least once, otherwise null. */
+  name: string | null;
+  createdAt: string;
 }
 
 export interface Guest {

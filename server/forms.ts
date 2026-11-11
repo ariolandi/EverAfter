@@ -25,8 +25,16 @@ interface FormInput {
   details: InvitationDetails;
 }
 
-/** Validates an invitation body, or responds 400 and returns undefined. */
-async function parseFormInput<P>(req: Request<P>, res: Response): Promise<FormInput | undefined> {
+/**
+ * Validates an invitation body, or responds 400 and returns undefined.
+ * The image must be one of the user's own, or the invitation's current image: a co-owner editing the
+ * invitation can keep the image another owner picked even though it isn't in their own gallery.
+ */
+async function parseFormInput<P>(
+  req: Request<P>,
+  res: Response,
+  currentImageId: number | null = null,
+): Promise<FormInput | undefined> {
   const { imageId, showName, showAnswer } = req.body ?? {};
   const brideName = typeof req.body?.brideName === 'string' ? req.body.brideName.trim() : '';
   const groomName = typeof req.body?.groomName === 'string' ? req.body.groomName.trim() : '';
@@ -58,7 +66,11 @@ async function parseFormInput<P>(req: Request<P>, res: Response): Promise<FormIn
     res.status(HttpStatus.BAD_REQUEST).json({ error: `colors must be 1-${MAX_COLORS} #rrggbb values` });
     return;
   }
-  if (imageId !== null && !(Number.isInteger(imageId) && (await getImageFile(req.user!.id, imageId)))) {
+  if (
+    imageId !== null &&
+    imageId !== currentImageId &&
+    !(Number.isInteger(imageId) && (await getImageFile(req.user!.id, imageId)))
+  ) {
     res.status(HttpStatus.BAD_REQUEST).json({ error: 'image not found' });
     return;
   }
@@ -72,7 +84,7 @@ async function parseFormInput<P>(req: Request<P>, res: Response): Promise<FormIn
 // Saving needs a signed-in builder; viewing and answering a form is public by slug.
 formRouter.post('/', requireUser, async (req, res) => {
   const { eventId } = req.body ?? {};
-  const event = Number.isInteger(eventId) ? await getEvent(req.user!.id, eventId) : undefined;
+  const event = Number.isInteger(eventId) ? await getEvent(req.user!, eventId) : undefined;
   if (!event) {
     res.status(HttpStatus.BAD_REQUEST).json({ error: 'event not found' });
     return;
@@ -90,9 +102,10 @@ formRouter.post('/', requireUser, async (req, res) => {
 });
 
 formRouter.put('/:slug', requireUser, async (req: Request<{ slug: string }>, res) => {
-  const input = await parseFormInput(req, res);
+  const existing = await getForm(req.params.slug);
+  const input = await parseFormInput(req, res, existing?.form.imageId ?? null);
   if (!input) return;
-  const form = await updateForm(req.user!.id, req.params.slug, input.imageId, input.fields, input.details);
+  const form = await updateForm(req.user!, req.params.slug, input.imageId, input.fields, input.details);
   if (!form) {
     res.status(HttpStatus.NOT_FOUND).json({ error: 'form not found' });
     return;
@@ -101,7 +114,7 @@ formRouter.put('/:slug', requireUser, async (req: Request<{ slug: string }>, res
 });
 
 formRouter.delete('/:slug', requireUser, async (req: Request<{ slug: string }>, res) => {
-  if (!(await deleteForm(req.user!.id, req.params.slug))) {
+  if (!(await deleteForm(req.user!, req.params.slug))) {
     res.status(HttpStatus.NOT_FOUND).json({ error: 'form not found' });
     return;
   }

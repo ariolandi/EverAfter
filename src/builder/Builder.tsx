@@ -50,7 +50,8 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
     // A new invitation defaults to the latest image; a saved one keeps exactly the image it was saved with.
     const selected = images.find((image) => image.id === selectedId) ?? (slug ? undefined : images[0]);
 
-    const save = async () => {
+    /** Saves the invitation; resolves to whether the save succeeded. */
+    const save = async (): Promise<boolean> => {
         setSaving(true);
         setError(null);
         try {
@@ -61,11 +62,17 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
             setSlug(form.slug);
             setSelectedId(form.imageId);
             setSavedNotice(true);
+            return true;
         } catch (e) {
             setError((e as Error).message);
+            return false;
         } finally {
             setSaving(false);
         }
+    };
+
+    const saveAndNext = async () => {
+        if (await save()) setActiveStep((step) => step + 1);
     };
 
     useEffect(() => {
@@ -120,7 +127,8 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
             details.weddingDate &&
             details.place.trim() &&
             details.colors.length > 0,
-    )
+    );
+    const canSave = !saving && detailsComplete && (fields.showName || fields.showAnswer);
 
     if (!loaded) return error ? <Alert severity="error">{error}</Alert> : null;
 
@@ -196,8 +204,8 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                     </Button>
                     <Button
                         variant="contained"
-                        disabled={activeStep === STEPS.length - 1}
-                        onClick={() => setActiveStep((step) => step + 1)}
+                        disabled={activeStep === STEPS.length - 1 || !canSave}
+                        onClick={saveAndNext}
                     >
                         Напред
                     </Button>
@@ -206,7 +214,7 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                         <Button
                             variant="outlined"
                             onClick={save}
-                            disabled={saving || !detailsComplete || (!fields.showName && !fields.showAnswer)}
+                            disabled={!canSave}
                         >
                             {saving ? 'Запазване…' : 'Запази'}
                         </Button>

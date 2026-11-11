@@ -1,4 +1,15 @@
-import { boolean, customType, index, integer, jsonb, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  customType,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  unique,
+} from 'drizzle-orm/pg-core';
 
 const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
 
@@ -61,6 +72,21 @@ export const events = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('events_user_id').on(t.userId)],
+);
+
+// People the owner invited to manage an event with them, by Google account email (stored lowercased).
+// An invite takes effect whenever someone signs in with that email, so it can be sent before they ever log in.
+export const eventCoowners = pgTable(
+  'event_coowners',
+  {
+    id: serial('id').primaryKey(),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [unique('event_coowners_event_email').on(t.eventId, t.email), index('event_coowners_email').on(t.email)],
 );
 
 export const guests = pgTable(

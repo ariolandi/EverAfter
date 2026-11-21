@@ -22,6 +22,20 @@
       "when": 1794423235639,
       "tag": "0002_event_coowners",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795124917868,
+      "tag": "0003_guest_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795272671855,
+      "tag": "0004_menus",
+      "breakpoints": true
     }
   ]
 }

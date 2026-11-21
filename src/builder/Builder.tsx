@@ -17,7 +17,7 @@ import type { InvitationDetails, FormFields, GeneratedImage } from '../../shared
 import { api } from '../api';
 import InvitationForm from '../form/InvitationForm';
 import MainInfo from './pages/MainInfo';
-import { ArrowBack } from '@mui/icons-material';
+import ArrowBack from '@mui/icons-material/ArrowBack';
 
 const STEPS = ['Основна информация', 'Изображение'];
 
@@ -47,20 +47,24 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
     const [slug, setSlug] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [savedNotice, setSavedNotice] = useState(false);
+    // The saved invitation's image. It may belong to another owner of the event, so it isn't always in `images`.
+    const [savedImage, setSavedImage] = useState<{ id: number; url: string } | null>(null);
     // A new invitation defaults to the latest image; a saved one keeps exactly the image it was saved with.
     const selected = images.find((image) => image.id === selectedId) ?? (slug ? undefined : images[0]);
+    const imageId = selected?.id ?? (slug ? selectedId : null);
+    const imageUrl = selected?.url ?? (savedImage && savedImage.id === imageId ? savedImage.url : null);
 
     /** Saves the invitation; resolves to whether the save succeeded. */
     const save = async (): Promise<boolean> => {
         setSaving(true);
         setError(null);
         try {
-            const imageId = selected?.id ?? null;
             const form = slug
                 ? await api.updateForm(slug, imageId, fields, details)
                 : await api.publishForm(eventId, imageId, fields, details);
             setSlug(form.slug);
             setSelectedId(form.imageId);
+            setSavedImage(form.imageId !== null && form.imageUrl ? { id: form.imageId, url: form.imageUrl } : null);
             setSavedNotice(true);
             return true;
         } catch (e) {
@@ -83,6 +87,9 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                 if (invitation) {
                     setSlug(invitation.slug);
                     setSelectedId(invitation.imageId);
+                    if (invitation.imageId !== null && invitation.imageUrl) {
+                        setSavedImage({ id: invitation.imageId, url: invitation.imageUrl });
+                    }
                     setFields({ showName: invitation.showName, showAnswer: invitation.showAnswer });
                     setDetails({
                         brideName: invitation.brideName,
@@ -265,7 +272,7 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                     <InvitationForm
                         fields={fields}
                         details={details}
-                        imageUrl={selected?.url ?? null}
+                        imageUrl={imageUrl}
                         page={activeStep}
                         onPageChange={setActiveStep}
                     />

@@ -1,22 +1,38 @@
+import crypto from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { HttpStatus } from '../shared/httpStatus.js';
+import type { MenuCourses, MenuInput } from '../shared/types.js';
 import { requireUser } from './auth.js';
 import {
   addCoowner,
+  areEventGuests,
   createEvent,
+  createGroup,
   createGuest,
+  createMenu,
   deleteCoowner,
   deleteEvent,
+  deleteGroup,
   deleteGuest,
+  deleteMenu,
   getEvent,
   listCoowners,
   listEvents,
+  listGroups,
   listGuests,
+  listMenus,
   normalizeEmail,
+  setGuestIsChild,
+  updateGroup,
+  updateMenu,
 } from './db.js';
+
+const MAX_GROUP_SIZE = 50;
 
 const MAX_NAME_LENGTH = 100;
 const MAX_EMAIL_LENGTH = 254;
+const MAX_DISH_LENGTH = 200;
+const MENU_COURSES = ['salad', 'appetizer', 'mainCourse'] as const;
 
 export const eventRouter = Router();
 
@@ -118,7 +134,93 @@ eventRouter.post('/:id/guests', async (req, res) => {
   const event = await findEvent(req, res);
   if (!event) return;
   const name = parseName(req, res);
-  if (name) res.status(HttpStatus.CREATED).json(await createGuest(event.id, name));
+  if (!name) return;
+  const isChild: unknown = req.body?.isChild ?? false;
+  if (typeof isChild !== 'boolean') {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: 'isChild must be a boolean' });
+    return;
+  }
+  res.status(HttpStatus.CREATED).json(await createGuest(event.id, name, isChild));
+});
+
+eventRouter.patch('/:id/guests/:guestId', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const isChild: unknown = req.body?.isChild;
+  if (typeof isChild !== 'boolean') {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: 'isChild must be a boolean' });
+    return;
+  }
+  const guestId = Number(req.params.guestId);
+  const guest = Number.isInteger(guestId) ? await setGuestIsChild(event.id, guestId, isChild) : undefined;
+  if (!guest) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'guest not found' });
+    return;
+  }
+  res.json(guest);
+});
+
+/** Validates a group body, or responds 400 and returns undefined. Every guest must belong to the event. */
+async function parseGroupInput(req: Request, res: Response, eventId: number) {
+  const name = parseName(req, res);
+  if (!name) return undefined;
+  const guestIds: unknown = req.body?.guestIds;
+  if (
+    !Array.isArray(guestIds) ||
+    guestIds.length === 0 ||
+    guestIds.length > MAX_GROUP_SIZE ||
+    !guestIds.every((id) => Number.isInteger(id))
+  ) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: `choose 1-${MAX_GROUP_SIZE} guests for the group` });
+    return undefined;
+  }
+  const ids = [...new Set(guestIds as number[])];
+  if (!(await areEventGuests(eventId, ids))) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: 'guest not found' });
+    return undefined;
+  }
+  return { name, guestIds: ids };
+}
+
+eventRouter.get('/:id/groups', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (event) res.json(await listGroups(event.id));
+});
+
+eventRouter.post('/:id/groups', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const input = await parseGroupInput(req, res, event.id);
+  if (!input) return;
+  const token = crypto.randomBytes(9).toString('base64url');
+  res.status(HttpStatus.CREATED).json(await createGroup(event.id, input.name, token, input.guestIds));
+});
+
+eventRouter.put('/:id/groups/:groupId', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const groupId = Number(req.params.groupId);
+  const input = await parseGroupInput(req, res, event.id);
+  if (!input) return;
+  const group = Number.isInteger(groupId)
+    ? await updateGroup(event.id, groupId, input.name, input.guestIds)
+    : undefined;
+  if (!group) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'group not found' });
+    return;
+  }
+  res.json(group);
+});
+
+eventRouter.delete('/:id/groups/:groupId', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const groupId = Number(req.params.groupId);
+  if (!Number.isInteger(groupId) || !(await deleteGroup(event.id, groupId))) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'group not found' });
+    return;
+  }
+  res.status(HttpStatus.NO_CONTENT).end();
 });
 
 eventRouter.delete('/:id/guests/:guestId', async (req, res) => {
@@ -127,6 +229,64 @@ eventRouter.delete('/:id/guests/:guestId', async (req, res) => {
   const guestId = Number(req.params.guestId);
   if (!Number.isInteger(guestId) || !(await deleteGuest(event.id, guestId))) {
     res.status(HttpStatus.NOT_FOUND).json({ error: 'guest not found' });
+    return;
+  }
+  res.status(HttpStatus.NO_CONTENT).end();
+});
+
+/** Validates a menu body, or responds 400 and returns undefined. Every course needs a dish. */
+function parseMenuInput(req: Request, res: Response): MenuInput | undefined {
+  const name = parseName(req, res);
+  if (!name) return undefined;
+  const isChild: unknown = req.body?.isChild ?? false;
+  if (typeof isChild !== 'boolean') {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: 'isChild must be a boolean' });
+    return undefined;
+  }
+  const courses = {} as MenuCourses;
+  for (const course of MENU_COURSES) {
+    const dish = typeof req.body?.[course] === 'string' ? (req.body[course] as string).trim() : '';
+    if (!dish || dish.length > MAX_DISH_LENGTH) {
+      res.status(HttpStatus.BAD_REQUEST).json({ error: `${course} must be 1-${MAX_DISH_LENGTH} characters` });
+      return undefined;
+    }
+    courses[course] = dish;
+  }
+  return { name, isChild, ...courses };
+}
+
+eventRouter.get('/:id/menus', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (event) res.json(await listMenus(event.id));
+});
+
+eventRouter.post('/:id/menus', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const input = parseMenuInput(req, res);
+  if (input) res.status(HttpStatus.CREATED).json(await createMenu(event.id, input));
+});
+
+eventRouter.put('/:id/menus/:menuId', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const input = parseMenuInput(req, res);
+  if (!input) return;
+  const menuId = Number(req.params.menuId);
+  const menu = Number.isInteger(menuId) ? await updateMenu(event.id, menuId, input) : undefined;
+  if (!menu) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'menu not found' });
+    return;
+  }
+  res.json(menu);
+});
+
+eventRouter.delete('/:id/menus/:menuId', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const menuId = Number(req.params.menuId);
+  if (!Number.isInteger(menuId) || !(await deleteMenu(event.id, menuId))) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'menu not found' });
     return;
   }
   res.status(HttpStatus.NO_CONTENT).end();

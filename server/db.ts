@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, gt, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, gt, inArray, lte, notInArray, or, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import type {
@@ -6,13 +6,29 @@ import type {
   EventInfo,
   FormFields,
   GeneratedImage,
+  GroupResponse,
   Guest,
+  GuestGroup,
   InvitationDetails,
+  Menu,
+  MenuInput,
   PublishedForm,
   Task,
   User,
 } from '../shared/types.js';
-import { eventCoowners, events, formResponses, forms, guests, images, sessions, tasks, users } from './schema.js';
+import {
+  eventCoowners,
+  events,
+  formResponses,
+  forms,
+  guestGroups,
+  guests,
+  images,
+  menus,
+  sessions,
+  tasks,
+  users,
+} from './schema.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -105,6 +121,18 @@ const toEvent = (
 const toGuest = (row: typeof guests.$inferSelect): Guest => ({
   id: row.id,
   name: row.name,
+  groupId: row.groupId,
+  isChild: row.isChild,
+  createdAt: row.createdAt.toISOString(),
+});
+
+const toMenu = (row: typeof menus.$inferSelect): Menu => ({
+  id: row.id,
+  name: row.name,
+  isChild: row.isChild,
+  salad: row.salad,
+  appetizer: row.appetizer,
+  mainCourse: row.mainCourse,
   createdAt: row.createdAt.toISOString(),
 });
 
@@ -242,6 +270,12 @@ export async function deleteEvent(userId: number, id: number): Promise<boolean> 
   return deleted.length > 0;
 }
 
+/** The invited person's name, once someone has signed in with that email. */
+// Columns are written out with their tables: Drizzle prints them unqualified here, so "email" would mean users.email.
+const coownerName = sql<string | null>`(
+  select "users"."name" from ${users} where lower("users"."email") = "event_coowners"."email" limit 1
+)`;
+
 // Co-owner and guest queries take an event id the caller has already checked the signed-in user may manage.
 export async function listCoowners(eventId: number): Promise<Coowner[]> {
   const rows = await db
@@ -249,7 +283,7 @@ export async function listCoowners(eventId: number): Promise<Coowner[]> {
       id: eventCoowners.id,
       email: eventCoowners.email,
       createdAt: eventCoowners.createdAt,
-      name: sql<string | null>`(select ${users.name} from ${users} where lower(${users.email}) = ${eventCoowners.email} limit 1)`,
+      name: coownerName,
     })
     .from(eventCoowners)
     .where(eq(eventCoowners.eventId, eventId))
@@ -260,11 +294,7 @@ export async function listCoowners(eventId: number): Promise<Coowner[]> {
 /** Invites a co-owner; resolves to undefined if that email is already invited to the event. */
 export async function addCoowner(eventId: number, email: string): Promise<Coowner | undefined> {
   const normalized = normalizeEmail(email);
-  const [row] = await db
-    .insert(eventCoowners)
-    .values({ eventId, email: normalized })
-    .onConflictDoNothing()
-    .returning();
+  const [row] = await db.insert(eventCoowners).values({ eventId, email: normalized }).onConflictDoNothing().returning();
   if (!row) return undefined;
   const [user] = await db
     .select({ name: users.name })
@@ -287,9 +317,50 @@ export async function listGuests(eventId: number): Promise<Guest[]> {
   return rows.map(toGuest);
 }
 
-export async function createGuest(eventId: number, name: string): Promise<Guest> {
-  const [row] = await db.insert(guests).values({ eventId, name }).returning();
+export async function createGuest(eventId: number, name: string, isChild: boolean): Promise<Guest> {
+  const [row] = await db.insert(guests).values({ eventId, name, isChild }).returning();
   return toGuest(row);
+}
+
+export async function setGuestIsChild(eventId: number, id: number, isChild: boolean): Promise<Guest | undefined> {
+  const [row] = await db
+    .update(guests)
+    .set({ isChild })
+    .where(and(eq(guests.id, id), eq(guests.eventId, eventId)))
+    .returning();
+  return row && toGuest(row);
+}
+
+/** Adults' menus first, then children's, each by name. */
+export async function listMenus(eventId: number): Promise<Menu[]> {
+  const rows = await db
+    .select()
+    .from(menus)
+    .where(eq(menus.eventId, eventId))
+    .orderBy(menus.isChild, menus.name, menus.id);
+  return rows.map(toMenu);
+}
+
+export async function createMenu(eventId: number, input: MenuInput): Promise<Menu> {
+  const [row] = await db.insert(menus).values({ eventId, ...input }).returning();
+  return toMenu(row);
+}
+
+export async function updateMenu(eventId: number, id: number, input: MenuInput): Promise<Menu | undefined> {
+  const [row] = await db
+    .update(menus)
+    .set(input)
+    .where(and(eq(menus.id, id), eq(menus.eventId, eventId)))
+    .returning();
+  return row && toMenu(row);
+}
+
+export async function deleteMenu(eventId: number, id: number): Promise<boolean> {
+  const deleted = await db
+    .delete(menus)
+    .where(and(eq(menus.id, id), eq(menus.eventId, eventId)))
+    .returning({ id: menus.id });
+  return deleted.length > 0;
 }
 
 export async function deleteGuest(eventId: number, id: number): Promise<boolean> {
@@ -298,6 +369,205 @@ export async function deleteGuest(eventId: number, id: number): Promise<boolean>
     .where(and(eq(guests.id, id), eq(guests.eventId, eventId)))
     .returning({ id: guests.id });
   return deleted.length > 0;
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+const responseColumns = {
+  groupId: formResponses.groupId,
+  guestId: formResponses.guestId,
+  name: formResponses.name,
+  answer: formResponses.answer,
+  createdAt: formResponses.createdAt,
+};
+
+/** Groups response rows by group, in the order the answers were recorded. */
+type ResponseRow = {
+  groupId: number | null;
+  guestId: number | null;
+  name: string | null;
+  answer: boolean | null;
+  createdAt: Date;
+};
+
+function toGroupResponses(rows: ResponseRow[]) {
+  const byGroup = new Map<number, GroupResponse>();
+  for (const row of rows) {
+    if (row.groupId === null) continue;
+    let response = byGroup.get(row.groupId);
+    if (!response) {
+      response = { respondedAt: row.createdAt.toISOString(), guests: [] };
+      byGroup.set(row.groupId, response);
+    }
+    response.guests.push({ guestId: row.guestId, name: row.name ?? '', answer: row.answer });
+  }
+  return byGroup;
+}
+
+/** The groups' answers to the event's current invitation; answers to a deleted invitation went with it. */
+async function groupResponses(groupIds: number[], formId?: number): Promise<Map<number, GroupResponse>> {
+  if (groupIds.length === 0) return new Map();
+  const rows = await db
+    .select(responseColumns)
+    .from(formResponses)
+    .where(
+      and(
+        inArray(formResponses.groupId, groupIds),
+        formId === undefined ? undefined : eq(formResponses.formId, formId),
+      ),
+    )
+    .orderBy(asc(formResponses.id));
+  return toGroupResponses(rows);
+}
+
+export async function listGroups(eventId: number): Promise<GuestGroup[]> {
+  const groupRows = await db
+    .select()
+    .from(guestGroups)
+    .where(eq(guestGroups.eventId, eventId))
+    .orderBy(guestGroups.name, guestGroups.id);
+  const ids = groupRows.map((g) => g.id);
+  if (ids.length === 0) return [];
+  const [members, responses] = await Promise.all([
+    db
+      .select({ id: guests.id, groupId: guests.groupId })
+      .from(guests)
+      .where(inArray(guests.groupId, ids))
+      .orderBy(guests.name, guests.id),
+    groupResponses(ids),
+  ]);
+  return groupRows.map((group) => ({
+    id: group.id,
+    name: group.name,
+    token: group.token,
+    guestIds: members.filter((m) => m.groupId === group.id).map((m) => m.id),
+    response: responses.get(group.id) ?? null,
+    createdAt: group.createdAt.toISOString(),
+  }));
+}
+
+/** Puts exactly `guestIds` (guests of the event) in the group, taking them out of any other group. */
+async function setGroupMembers(tx: Tx, eventId: number, groupId: number, guestIds: number[]) {
+  await tx
+    .update(guests)
+    .set({ groupId: null })
+    .where(and(eq(guests.groupId, groupId), guestIds.length ? notInArray(guests.id, guestIds) : undefined));
+  if (guestIds.length) {
+    await tx
+      .update(guests)
+      .set({ groupId })
+      .where(and(eq(guests.eventId, eventId), inArray(guests.id, guestIds)));
+  }
+}
+
+/** Whether every id is a guest of the event. */
+export async function areEventGuests(eventId: number, guestIds: number[]): Promise<boolean> {
+  if (guestIds.length === 0) return true;
+  const count = await db.$count(guests, and(eq(guests.eventId, eventId), inArray(guests.id, guestIds)));
+  return count === new Set(guestIds).size;
+}
+
+async function getGroup(eventId: number, id: number): Promise<GuestGroup | undefined> {
+  return (await listGroups(eventId)).find((g) => g.id === id);
+}
+
+export async function createGroup(
+  eventId: number,
+  name: string,
+  token: string,
+  guestIds: number[],
+): Promise<GuestGroup> {
+  const id = await db.transaction(async (tx) => {
+    const [row] = await tx.insert(guestGroups).values({ eventId, name, token }).returning({ id: guestGroups.id });
+    await setGroupMembers(tx, eventId, row.id, guestIds);
+    return row.id;
+  });
+  return (await getGroup(eventId, id))!;
+}
+
+export async function updateGroup(
+  eventId: number,
+  id: number,
+  name: string,
+  guestIds: number[],
+): Promise<GuestGroup | undefined> {
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(guestGroups)
+      .set({ name })
+      .where(and(eq(guestGroups.id, id), eq(guestGroups.eventId, eventId)))
+      .returning({ id: guestGroups.id });
+    if (!row) return false;
+    await setGroupMembers(tx, eventId, id, guestIds);
+    return true;
+  });
+  return updated ? getGroup(eventId, id) : undefined;
+}
+
+export async function deleteGroup(eventId: number, id: number): Promise<boolean> {
+  const deleted = await db
+    .delete(guestGroups)
+    .where(and(eq(guestGroups.id, id), eq(guestGroups.eventId, eventId)))
+    .returning({ id: guestGroups.id });
+  return deleted.length > 0;
+}
+
+export interface GroupInvitationRecord {
+  groupId: number;
+  groupName: string;
+  guests: { id: number; name: string }[];
+  /** The event's invitation, or null if it hasn't been published yet. */
+  form: { id: number; form: PublishedForm } | null;
+  response: GroupResponse | null;
+}
+
+/** Everything a group's public link needs, found by the group's token. */
+export async function getGroupInvitation(token: string): Promise<GroupInvitationRecord | undefined> {
+  const [row] = await db
+    .select({ group: guestGroups, form: forms })
+    .from(guestGroups)
+    .leftJoin(forms, eq(forms.eventId, guestGroups.eventId))
+    .where(eq(guestGroups.token, token));
+  if (!row) return undefined;
+  const [members, responses] = await Promise.all([
+    db
+      .select({ id: guests.id, name: guests.name })
+      .from(guests)
+      .where(eq(guests.groupId, row.group.id))
+      .orderBy(guests.name, guests.id),
+    row.form ? groupResponses([row.group.id], row.form.id) : new Map<number, GroupResponse>(),
+  ]);
+  return {
+    groupId: row.group.id,
+    groupName: row.group.name,
+    guests: members,
+    form: row.form && { id: row.form.id, form: toForm(row.form) },
+    response: responses.get(row.group.id) ?? null,
+  };
+}
+
+/**
+ * Records a group's answer, one row per guest. Resolves to undefined if the group already answered: the group row
+ * is locked first so two submissions at once can't both be recorded.
+ */
+export async function createGroupResponse(
+  formId: number,
+  groupId: number,
+  answers: { guestId: number; name: string; answer: boolean | null }[],
+): Promise<GroupResponse | undefined> {
+  const rows = await db.transaction(async (tx) => {
+    await tx.select({ id: guestGroups.id }).from(guestGroups).where(eq(guestGroups.id, groupId)).for('update');
+    const already = await tx.$count(
+      formResponses,
+      and(eq(formResponses.formId, formId), eq(formResponses.groupId, groupId)),
+    );
+    if (already > 0) return undefined;
+    return tx
+      .insert(formResponses)
+      .values(answers.map((a) => ({ formId, groupId, guestId: a.guestId, name: a.name, answer: a.answer })))
+      .returning(responseColumns);
+  });
+  return rows && toGroupResponses(rows).get(groupId);
 }
 
 export async function createForm(

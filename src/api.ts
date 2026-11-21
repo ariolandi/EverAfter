@@ -5,8 +5,16 @@ import type {
   FormFields,
   FormResponseInput,
   GeneratedImage,
+  GroupInvitation,
+  GroupResponse,
+  GroupResponseInput,
   Guest,
+  GuestGroup,
+  GuestGroupInput,
+  GuestInput,
   InvitationDetails,
+  Menu,
+  MenuInput,
   PublishedForm,
   Task,
   User,
@@ -56,10 +64,32 @@ export const api = {
   deleteCoowner: (eventId: number, id: number) =>
     request<void>(`/api/events/${eventId}/coowners/${id}`, { method: 'DELETE' }),
   listGuests: (eventId: number) => request<Guest[]>(`/api/events/${eventId}/guests`),
-  addGuest: (eventId: number, name: string) =>
-    request<Guest>(`/api/events/${eventId}/guests`, { method: 'POST', body: JSON.stringify({ name }) }),
+  addGuest: (eventId: number, input: GuestInput) =>
+    request<Guest>(`/api/events/${eventId}/guests`, { method: 'POST', body: JSON.stringify(input) }),
+  setGuestIsChild: (eventId: number, id: number, isChild: boolean) =>
+    request<Guest>(`/api/events/${eventId}/guests/${id}`, { method: 'PATCH', body: JSON.stringify({ isChild }) }),
   deleteGuest: (eventId: number, id: number) =>
     request<void>(`/api/events/${eventId}/guests/${id}`, { method: 'DELETE' }),
+  listGroups: (eventId: number) => request<GuestGroup[]>(`/api/events/${eventId}/groups`),
+  createGroup: (eventId: number, input: GuestGroupInput) =>
+    request<GuestGroup>(`/api/events/${eventId}/groups`, { method: 'POST', body: JSON.stringify(input) }),
+  updateGroup: (eventId: number, id: number, input: GuestGroupInput) =>
+    request<GuestGroup>(`/api/events/${eventId}/groups/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteGroup: (eventId: number, id: number) =>
+    request<void>(`/api/events/${eventId}/groups/${id}`, { method: 'DELETE' }),
+  listMenus: (eventId: number) => request<Menu[]>(`/api/events/${eventId}/menus`),
+  createMenu: (eventId: number, input: MenuInput) =>
+    request<Menu>(`/api/events/${eventId}/menus`, { method: 'POST', body: JSON.stringify(input) }),
+  updateMenu: (eventId: number, id: number, input: MenuInput) =>
+    request<Menu>(`/api/events/${eventId}/menus/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteMenu: (eventId: number, id: number) =>
+    request<void>(`/api/events/${eventId}/menus/${id}`, { method: 'DELETE' }),
+  getGroupInvitation: (token: string) => request<GroupInvitation>(`/api/groups/${encodeURIComponent(token)}`),
+  submitGroupResponse: (token: string, response: GroupResponseInput) =>
+    request<GroupResponse>(`/api/groups/${encodeURIComponent(token)}/responses`, {
+      method: 'POST',
+      body: JSON.stringify(response),
+    }),
 
   publishForm: (eventId: number, imageId: number | null, fields: FormFields, details: InvitationDetails) =>
     request<PublishedForm>('/api/forms', {

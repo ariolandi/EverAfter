@@ -1,11 +1,11 @@
 import { IconButton, InputAdornment, TextField } from '@mui/material';
-import { ContentCopy } from '@mui/icons-material';
+import ContentCopy from '@mui/icons-material/ContentCopy';
 
 /** Read-only share link with a copy-to-clipboard button. */
-export default function ShareLinkField({ url }: { url: string }) {
+export default function ShareLinkField({ url, label = 'Share link' }: { url: string; label?: string }) {
     return (
         <TextField
-            label="Share link"
+            label={label}
             value={url}
             size="small"
             fullWidth

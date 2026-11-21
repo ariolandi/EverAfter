@@ -7,6 +7,7 @@ import { authRouter, loadUser, requireUser } from './auth.js';
 import { createTask, deleteTask, listTasks, migrateDatabase, setTaskCompleted } from './db.js';
 import { eventRouter } from './events.js';
 import { formRouter } from './forms.js';
+import { groupRouter } from './groups.js';
 import { imageRouter } from './images.js';
 
 const app = express();
@@ -64,6 +65,7 @@ app.delete('/api/tasks/:id', async (req, res) => {
 app.use('/api/events', eventRouter);
 app.use('/api/images', imageRouter);
 app.use('/api/forms', formRouter);
+app.use('/api/groups', groupRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const clientDir = path.resolve('dist');

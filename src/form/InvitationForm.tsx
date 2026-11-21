@@ -1,18 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import {
-    Alert,
-    Box,
-    Button,
-    IconButton,
-    Paper,
-    Stack,
-    TextField,
-    ToggleButton,
-    ToggleButtonGroup,
-    Typography,
-} from '@mui/material';
-import { KeyboardArrowDown } from '@mui/icons-material';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { Box, IconButton, Paper, Stack, Typography } from '@mui/material';
+import KeyboardArrowDown from '@mui/icons-material/KeyboardArrowDown';
 import type { InvitationDetails, FormFields, FormResponseInput } from '../../shared/types';
+import RsvpForm from './RsvpForm';
 
 interface Props {
     fields: FormFields;
@@ -20,6 +10,8 @@ interface Props {
     imageUrl: string | null;
     /** Omit to render a non-submittable preview. */
     onSubmit?: (response: FormResponseInput) => Promise<void>;
+    /** Replaces the general answer form, e.g. with a group's form that has the names filled in. */
+    responseForm?: ReactNode;
     /** Page to show, matching the builder's step. Omit to let the reader scroll freely. */
     page?: number;
     /** Called when the reader moves to another page by arrow or scrolling. */
@@ -73,21 +65,14 @@ function InvitationPage({ children, imageUrl, onNext }: PageProps) {
     );
 }
 
-export default function InvitationForm({ fields, details, imageUrl, onSubmit, page, onPageChange }: Props) {
+export default function InvitationForm({ fields, details, imageUrl, onSubmit, responseForm, page, onPageChange }: Props) {
     const coupleTitle = [details.brideName, details.groomName].map((n) => n.trim()).filter(Boolean).join(' & ');
     const [year, month, day] = details.weddingDate.split('-').map(Number);
     // Built from parts so the date is local and doesn't shift a day in timezones west of UTC.
     const weddingDate = details.weddingDate
         ? new Date(year, month - 1, day).toLocaleDateString('BG', { day: 'numeric', month: 'long', year: 'numeric' })
         : '';
-    const [name, setName] = useState('');
-    const [answer, setAnswer] = useState<boolean | null>(null);
-    const [submitting, setSubmitting] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
-
-    const complete = (!fields.showName || name.trim() !== '') && (!fields.showAnswer || answer !== null);
 
     const scrollToPage = (target: number) => {
         const el = scrollRef.current;
@@ -104,24 +89,6 @@ export default function InvitationForm({ fields, details, imageUrl, onSubmit, pa
     const reportScrolledPage = () => {
         const el = scrollRef.current;
         if (el && onPageChange) onPageChange(Math.round(el.scrollTop / el.clientHeight));
-    };
-
-    const submit = async (event: FormEvent) => {
-        event.preventDefault();
-        if (!onSubmit || !complete) return;
-        setSubmitting(true);
-        setError(null);
-        try {
-            await onSubmit({
-                ...(fields.showName && { name: name.trim() }),
-                ...(fields.showAnswer && answer !== null && { answer }),
-            });
-            setSubmitted(true);
-        } catch (e) {
-            setError((e as Error).message);
-        } finally {
-            setSubmitting(false);
-        }
     };
 
     return (
@@ -161,44 +128,7 @@ export default function InvitationForm({ fields, details, imageUrl, onSubmit, pa
             </InvitationPage>
 
             <InvitationPage imageUrl={imageUrl}>
-                <Paper component="form" onSubmit={submit} sx={{ p: 2.5, bgcolor: 'rgba(255, 255, 255, 0.92)' }}>
-                    {submitted ? (
-                        <Alert severity="success">Благодарим ви за отговора!</Alert>
-                    ) : (
-                        <Stack spacing={1.5}>
-                            {fields.showName && (
-                                <TextField
-                                    required
-                                    label="Вашето име"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    slotProps={{ htmlInput: { maxLength: 100 } }}
-                                    size="small"
-                                    fullWidth
-                                    disabled={submitting}
-                                />
-                            )}
-                            {fields.showAnswer && (
-                                <ToggleButtonGroup
-                                    exclusive
-                                    fullWidth
-                                    size="small"
-                                    color="primary"
-                                    value={answer}
-                                    onChange={(_e, value: boolean | null) => setAnswer(value)}
-                                    disabled={submitting}
-                                >
-                                    <ToggleButton value={true}>Ще присъствам</ToggleButton>
-                                    <ToggleButton value={false}>Няма да присъствам</ToggleButton>
-                                </ToggleButtonGroup>
-                            )}
-                            {error && <Alert severity="error">{error}</Alert>}
-                            <Button type="submit" variant="contained" disabled={!onSubmit || !complete || submitting}>
-                                {submitting ? 'Изпращане…' : 'Изпрати'}
-                            </Button>
-                        </Stack>
-                    )}
-                </Paper>
+                {responseForm ?? <RsvpForm fields={fields} onSubmit={onSubmit} />}
             </InvitationPage>
         </Box>
     );

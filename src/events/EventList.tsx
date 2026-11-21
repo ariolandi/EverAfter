@@ -17,7 +17,8 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { Add, DeleteOutlined } from '@mui/icons-material';
+import Add from '@mui/icons-material/Add';
+import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
 import type { EventInfo } from '../../shared/types';
 import { api } from '../api';
 
@@ -25,7 +26,7 @@ interface EventListProps {
     onOpen: (eventId: number) => void;
 }
 
-/** Main page: every event of the signed-in user, with create, open and delete. */
+/** Main page: every event the signed-in user owns or co-owns, with create, open and delete (owner only). */
 export default function EventList({ onOpen }: EventListProps) {
     const [events, setEvents] = useState<EventInfo[] | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -93,20 +94,27 @@ export default function EventList({ onOpen }: EventListProps) {
                                 <Typography variant="body2" color="text.secondary" gutterBottom>
                                     Гости: {event.guestCount}
                                 </Typography>
-                                <Chip
-                                    size="small"
-                                    color={event.invitation ? 'primary' : 'default'}
-                                    label={event.invitation ? 'Има покана' : 'Няма покана'}
-                                />
+                                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                                    <Chip
+                                        size="small"
+                                        color={event.invitation ? 'primary' : 'default'}
+                                        label={event.invitation ? 'Има покана' : 'Няма покана'}
+                                    />
+                                    {!event.isOwner && (
+                                        <Chip size="small" variant="outlined" label={`Съорганизатор с ${event.ownerName}`} />
+                                    )}
+                                </Stack>
                             </CardContent>
                         </CardActionArea>
-                        <IconButton
-                            aria-label={`Изтрий ${event.name}`}
-                            onClick={() => setToDelete(event)}
-                            sx={{ position: 'absolute', top: 8, right: 8 }}
-                        >
-                            <DeleteOutlined />
-                        </IconButton>
+                        {event.isOwner && (
+                            <IconButton
+                                aria-label={`Изтрий ${event.name}`}
+                                onClick={() => setToDelete(event)}
+                                sx={{ position: 'absolute', top: 8, right: 8 }}
+                            >
+                                <DeleteOutlined />
+                            </IconButton>
+                        )}
                     </Card>
                 ))}
             </Box>

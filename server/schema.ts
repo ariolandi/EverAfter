@@ -89,6 +89,21 @@ export const eventCoowners = pgTable(
   (t) => [unique('event_coowners_event_email').on(t.eventId, t.email), index('event_coowners_email').on(t.email)],
 );
 
+// Guests invited together (a family, a couple). Each group gets its own invitation link, opened by its token.
+export const guestGroups = pgTable(
+  'guest_groups',
+  {
+    id: serial('id').primaryKey(),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    token: text('token').notNull().unique(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('guest_groups_event_id').on(t.eventId)],
+);
+
 export const guests = pgTable(
   'guests',
   {
@@ -96,10 +111,31 @@ export const guests = pgTable(
     eventId: integer('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
+    // A guest is in at most one group; deleting the group keeps the guest on the list.
+    groupId: integer('group_id').references(() => guestGroups.id, { onDelete: 'set null' }),
     name: text('name').notNull(),
+    isChild: boolean('is_child').notNull().default(false),
     createdAt: createdAt(),
   },
-  (t) => [index('guests_event_id').on(t.eventId)],
+  (t) => [index('guests_event_id').on(t.eventId), index('guests_group_id').on(t.groupId)],
+);
+
+// Menu options served at the event, each with one dish per course. Children's menus are flagged with `isChild`.
+export const menus = pgTable(
+  'menus',
+  {
+    id: serial('id').primaryKey(),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    isChild: boolean('is_child').notNull().default(false),
+    salad: text('salad').notNull(),
+    appetizer: text('appetizer').notNull(),
+    mainCourse: text('main_course').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('menus_event_id').on(t.eventId)],
 );
 
 export const forms = pgTable('forms', {
@@ -131,9 +167,13 @@ export const formResponses = pgTable(
     formId: integer('form_id')
       .notNull()
       .references(() => forms.id, { onDelete: 'cascade' }),
+    // Set for answers sent from a group's link: one row per guest in the group.
+    groupId: integer('group_id').references(() => guestGroups.id, { onDelete: 'cascade' }),
+    // Kept as null if the guest is later removed; `name` still records who answered.
+    guestId: integer('guest_id').references(() => guests.id, { onDelete: 'set null' }),
     name: text('name'),
     answer: boolean('answer'),
     createdAt: createdAt(),
   },
-  (t) => [index('form_responses_form_id').on(t.formId)],
+  (t) => [index('form_responses_form_id').on(t.formId), index('form_responses_group_id').on(t.groupId)],
 );

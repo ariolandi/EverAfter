@@ -1,0 +1,9 @@
+{
+  // Typechecks the server together with its tests, which the production build (tsconfig.server.json) leaves out.
+  "extends": "./tsconfig.server.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["server", "shared"],
+  "exclude": []
+}

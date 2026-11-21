@@ -18,6 +18,7 @@ groupRouter.get('/:token', async (req, res) => {
   }
   const invitation: GroupInvitation = {
     form: found.form.form,
+    schedule: found.schedule,
     groupName: found.groupName,
     guests: found.guests,
     response: found.response,

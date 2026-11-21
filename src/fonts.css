@@ -5,3 +5,36 @@
   font-style: normal;
   font-display: swap;
 }
+
+@font-face {
+  font-family: 'Azbuka';
+  src: url('../assets/fonts/Azbuka03_D.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Wolgast Two';
+  src: url('../assets/fonts/Wolgast Two Normal Cyr.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Wolgast Two';
+  src: url('../assets/fonts/Wolgast Two Bold Cyr.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Latin-only demo font: Cyrillic text will fall back to the next font in the stack. */
+@font-face {
+  font-family: 'Romantic Romance';
+  src: url('../assets/fonts/RomanticRomanceFreeDemo-rvoYK.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}

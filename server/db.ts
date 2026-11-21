@@ -13,6 +13,8 @@ import type {
   Menu,
   MenuInput,
   PublishedForm,
+  ScheduleItem,
+  ScheduleItemInput,
   Task,
   User,
 } from '../shared/types.js';
@@ -25,6 +27,7 @@ import {
   guests,
   images,
   menus,
+  scheduleItems,
   sessions,
   tasks,
   users,
@@ -70,7 +73,11 @@ const toForm = (row: typeof forms.$inferSelect): PublishedForm => ({
   weddingDate: row.weddingDate,
   place: row.place,
   colors: row.colors,
+  primaryColor: row.primaryColor,
+  secondaryColor: row.secondaryColor,
   invitationText: row.invitationText,
+  dressCode: row.dressCode,
+  colorUsage: row.colorUsage,
   imageUrl: row.imageId === null ? null : `/api/forms/${row.slug}/image`,
 });
 
@@ -134,6 +141,14 @@ const toMenu = (row: typeof menus.$inferSelect): Menu => ({
   salad: row.salad,
   appetizer: row.appetizer,
   mainCourse: row.mainCourse,
+  createdAt: row.createdAt.toISOString(),
+});
+
+const toScheduleItem = (row: typeof scheduleItems.$inferSelect): ScheduleItem => ({
+  id: row.id,
+  title: row.title,
+  startTime: row.startTime,
+  place: row.place,
   createdAt: row.createdAt.toISOString(),
 });
 
@@ -519,6 +534,8 @@ export interface GroupInvitationRecord {
   guests: { id: number; name: string }[];
   /** The event's invitation, or null if it hasn't been published yet. */
   form: { id: number; form: PublishedForm } | null;
+  /** The event's schedule, shown on the invitation's schedule page. */
+  schedule: ScheduleItem[];
   response: GroupResponse | null;
 }
 
@@ -530,19 +547,21 @@ export async function getGroupInvitation(token: string): Promise<GroupInvitation
     .leftJoin(forms, eq(forms.eventId, guestGroups.eventId))
     .where(eq(guestGroups.token, token));
   if (!row) return undefined;
-  const [members, responses] = await Promise.all([
+  const [members, responses, schedule] = await Promise.all([
     db
       .select({ id: guests.id, name: guests.name })
       .from(guests)
       .where(eq(guests.groupId, row.group.id))
       .orderBy(guests.name, guests.id),
     row.form ? groupResponses([row.group.id], row.form.id) : new Map<number, GroupResponse>(),
+    listScheduleItems(row.group.eventId),
   ]);
   return {
     groupId: row.group.id,
     groupName: row.group.name,
     guests: members,
     form: row.form && { id: row.form.id, form: toForm(row.form) },
+    schedule,
     response: responses.get(row.group.id) ?? null,
   };
 }
@@ -610,9 +629,11 @@ export async function deleteForm(viewer: Viewer, slug: string): Promise<boolean>
   return deleted.length > 0;
 }
 
-export async function getForm(slug: string): Promise<{ id: number; form: PublishedForm } | undefined> {
+export async function getForm(
+  slug: string,
+): Promise<{ id: number; eventId: number; form: PublishedForm } | undefined> {
   const [row] = await db.select().from(forms).where(eq(forms.slug, slug));
-  return row && { id: row.id, form: toForm(row) };
+  return row && { id: row.id, eventId: row.eventId, form: toForm(row) };
 }
 
 export async function getFormImage(slug: string): Promise<{ mimeType: string; data: Buffer } | undefined> {
@@ -626,4 +647,40 @@ export async function getFormImage(slug: string): Promise<{ mimeType: string; da
 
 export async function createFormResponse(formId: number, name: string | null, answer: boolean | null): Promise<void> {
   await db.insert(formResponses).values({ formId, name, answer });
+}
+
+/** In the order the parts take place. */
+export async function listScheduleItems(eventId: number): Promise<ScheduleItem[]> {
+  const rows = await db
+    .select()
+    .from(scheduleItems)
+    .where(eq(scheduleItems.eventId, eventId))
+    .orderBy(scheduleItems.startTime, scheduleItems.id);
+  return rows.map(toScheduleItem);
+}
+
+export async function createScheduleItem(eventId: number, input: ScheduleItemInput): Promise<ScheduleItem> {
+  const [row] = await db.insert(scheduleItems).values({ eventId, ...input }).returning();
+  return toScheduleItem(row);
+}
+
+export async function updateScheduleItem(
+  eventId: number,
+  id: number,
+  input: ScheduleItemInput,
+): Promise<ScheduleItem | undefined> {
+  const [row] = await db
+    .update(scheduleItems)
+    .set(input)
+    .where(and(eq(scheduleItems.id, id), eq(scheduleItems.eventId, eventId)))
+    .returning();
+  return row && toScheduleItem(row);
+}
+
+export async function deleteScheduleItem(eventId: number, id: number): Promise<boolean> {
+  const deleted = await db
+    .delete(scheduleItems)
+    .where(and(eq(scheduleItems.id, id), eq(scheduleItems.eventId, eventId)))
+    .returning({ id: scheduleItems.id });
+  return deleted.length > 0;
 }

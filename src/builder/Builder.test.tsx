@@ -50,7 +50,17 @@ describe('Builder', () => {
             1,
             null,
             { showName: true, showAnswer: true },
-            { brideName: 'Мария', groomName: 'Иван', weddingDate: '2027-06-12', place: 'Пловдив', colors: ['#ffffff'], invitationText: '' },
+            {
+                brideName: 'Мария',
+                groomName: 'Иван',
+                weddingDate: '2027-06-12',
+                place: 'Пловдив',
+                // A new invitation starts with ink text and a gold accent.
+                colors: ['#6b6254', '#c9a227'],
+                primaryColor: 0,
+                secondaryColor: 1,
+                invitationText: '',
+            },
         );
         expect(await screen.findByText('Поканата е запазена')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Редактирай поканата' })).toBeInTheDocument();
@@ -58,7 +68,15 @@ describe('Builder', () => {
 
     it('loads and updates an existing invitation', async () => {
         vi.mocked(api.getEvent).mockResolvedValue(
-            eventInfo({ invitation: publishedForm({ imageId: 99, imageUrl: '/api/forms/abc123/image' }) }),
+            eventInfo({
+                invitation: publishedForm({
+                    imageId: 99,
+                    imageUrl: '/api/forms/abc123/image',
+                    colors: ['#111111', '#222222', '#333333'],
+                    primaryColor: 2,
+                    secondaryColor: 0,
+                }),
+            }),
         );
         vi.mocked(api.updateForm).mockResolvedValue(publishedForm({ place: 'София' }));
         const { user } = renderWithTheme(<Builder eventId={1} onBack={vi.fn()} />);
@@ -70,12 +88,17 @@ describe('Builder', () => {
         await user.type(place, 'София');
         await user.click(screen.getByRole('button', { name: 'Запази' }));
 
-        // The saved image is kept.
+        // The saved image and colour marks are kept.
         expect(api.updateForm).toHaveBeenCalledWith(
             'abc123',
             99,
             { showName: true, showAnswer: true },
-            expect.objectContaining({ place: 'София' }),
+            expect.objectContaining({
+                place: 'София',
+                colors: ['#111111', '#222222', '#333333'],
+                primaryColor: 2,
+                secondaryColor: 0,
+            }),
         );
     });
 
@@ -134,6 +157,19 @@ describe('Builder', () => {
         await user.click(screen.getByRole('combobox', { name: 'Покана за' }));
         await user.click(screen.getByRole('option', { name: /обща покана/ }));
         expect(screen.getByText('гости')).toBeInTheDocument();
+    });
+
+    it('lets a guest without a group be greeted on their own', async () => {
+        vi.mocked(api.getEvent).mockResolvedValue(eventInfo({ invitation: publishedForm() }));
+        vi.mocked(api.listGuests).mockResolvedValue([guest(1, 'Иван Иванов'), guest(2, 'Петър Петров')]);
+        vi.mocked(api.listGroups).mockResolvedValue([group(10, 'Семейство Иванови', [1])]);
+        const { user } = renderWithTheme(<Builder eventId={1} onBack={vi.fn()} />);
+
+        expect(await screen.findByText('Иван')).toBeInTheDocument();
+        await user.click(screen.getByRole('combobox', { name: 'Покана за' }));
+        await user.click(screen.getByRole('option', { name: 'Петър Петров' }));
+        expect(screen.getByText('Петър')).toBeInTheDocument();
+        expect(screen.queryByText('Иван')).not.toBeInTheDocument();
     });
 
     it('shows the error when loading fails', async () => {

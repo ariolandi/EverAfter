@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from "react"
-import { InputBase, Paper, Stack, TextField, Typography } from "@mui/material"
+import { Stack, TextField, Typography } from "@mui/material"
 import {
-    MAX_INVITATION_TEXT_LENGTH,
     MAX_NAME_LENGTH,
     MAX_PLACE_LENGTH,
     type InvitationDetails,
@@ -64,8 +63,8 @@ export default function MainInfo({ details, setDetails }: MainInfoProps) {
             <Stack spacing={1}>
                 <Typography variant="subtitle2">Цветове</Typography>
                 <ColorPalette
-                    colors={details.colors}
-                    onChange={(colors) => setDetails((current) => ({ ...current, colors }))}
+                    palette={details}
+                    onChange={(palette) => setDetails((current) => ({ ...current, ...palette }))}
                 />
             </Stack>
         </Stack>

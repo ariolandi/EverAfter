@@ -1,9 +1,10 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Box, IconButton, Stack, Typography } from '@mui/material';
+import { Box, Divider, IconButton, Stack, Typography } from '@mui/material';
 import KeyboardArrowDown from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUp from '@mui/icons-material/KeyboardArrowUp';
 import type { InvitationDetails, FormFields, FormResponseInput } from '../../shared/types';
 import { isoToLongDate } from '../dates';
+import { scriptFont } from '../theme/typography';
 import { joinGuestNames } from './guestNames';
 import RsvpForm from './RsvpForm';
 
@@ -92,12 +93,17 @@ const plaqueSx = {
 } as const;
 
 /** A line of the cover page's text, under the greeting. */
-function Subtitle({ children }: { children: ReactNode }) {
+function Subtitle({ children, italic }: { children: ReactNode; italic?: boolean }) {
     return (
-        <Typography variant="subtitle1" align="center" color="text.secondary">
+        <Typography variant="subtitle1" align="center" color="inherit" sx={italic ? { fontStyle: 'italic' } : undefined}>
             {children}
         </Typography>
     );
+}
+
+/** A thin gold rule that sets off a part of the cover text. */
+function GoldRule() {
+    return <Divider aria-hidden sx={{ width: '40%', my: 1, borderColor: 'primary.main' }} />;
 }
 
 function InvitationPage({ children, imageUrl, onNext, onPrev }: PageProps) {
@@ -153,6 +159,10 @@ export default function InvitationForm({
         .filter(Boolean)
         .join(' & ');
     const weddingDate = isoToLongDate(details.weddingDate);
+    // The invitation's text is written in its primary colour; the gold headings keep their gilding.
+    const textColor = details.colors[details.primaryColor] ?? 'text.secondary';
+    // The guests' names stand out in the secondary colour.
+    const nameColor = details.colors[details.secondaryColor] ?? 'primary.dark';
     const place = details.place.trim();
     // Guests are greeted by their first name only: "Иван Иванов" → "Иван".
     const names = guestNames.map((n) => n.trim().split(/\s+/)[0]).filter(Boolean);
@@ -193,31 +203,41 @@ export default function InvitationForm({
             }}
         >
             <InvitationPage onNext={() => goToPage(1)}>
-                <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
-                    <Typography>
+                <Stack spacing={0.5} sx={{ alignItems: 'center', color: textColor }}>
+                    <Subtitle italic>
                             Скъпи
-                    </Typography>
-                    <Typography variant="h6" component="p" align="center" color="primary.dark">
+                    </Subtitle>
+                    <Typography variant="h6" component="p" align="center" sx={{ color: nameColor, fontStyle: 'italic', fontFamily: scriptFont, fontWeight: 400, fontSize: '1.75rem', lineHeight: 1.2 }}>
                         {addressee}
                     </Typography>
+                    <GoldRule />
                     <Subtitle>{invite}</Subtitle>
                     <Typography variant="metallic" component="h2" align="center">
                         Сватба
                     </Typography>
-                    <Subtitle>на</Subtitle>
-                    <Subtitle>{weddingDate}</Subtitle>
-                    <Subtitle>в</Subtitle>
-                    <Subtitle>{place}</Subtitle>
-                    <Subtitle>Нека заедно отбележим празника!</Subtitle>
-                    {/* The couple's names in gold, smaller than the "Сватба" heading. */}
-                    <Typography variant="metallic" component="h5" align="center" sx={{ fontSize: '1rem' }}>
+                    <Subtitle>на <i>{weddingDate}</i></Subtitle>
+                    <Subtitle italic>{place}</Subtitle>
+                    <GoldRule />
+                    <Subtitle>Нека заедно отбележим този щастлив момент!</Subtitle>
+                    {/* The couple's names in gold, smaller than the heading. */}
+                    <Typography variant="metallic" component="h5" align="center" sx={{ fontWeight: 600, fontSize: '1.5rem' }}>
                         {coupleTitle}
                     </Typography>
                 </Stack>
             </InvitationPage>
 
             <InvitationPage imageUrl={imageUrl} onPrev={() => goToPage(0)}>
-                {responseForm ?? <RsvpForm fields={fields} onSubmit={onSubmit} />}
+                {/* The answer page keeps the cover's colours: text in the primary, guests' names in the secondary. */}
+                <Box
+                    sx={{
+                        color: textColor,
+                        '& .MuiTypography-root': { color: 'inherit' },
+                        '& .MuiTypography-root.guest-name': { color: nameColor },
+                        '& .MuiFormLabel-root:not(.Mui-focused)': { color: textColor },
+                    }}
+                >
+                    {responseForm ?? <RsvpForm fields={fields} onSubmit={onSubmit} />}
+                </Box>
             </InvitationPage>
         </Box>
     );

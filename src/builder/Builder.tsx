@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Divider, Snackbar, Stack, Step, StepButton, Stepper, Typography } from '@mui/material';
-import type { InvitationDetails, FormFields, Guest, GuestGroup } from '../../shared/types';
+import type { InvitationColors, InvitationDetails, FormFields, Guest, GuestGroup } from '../../shared/types';
 import { api } from '../api';
 import BackButton from '../components/BackButton';
 import { errorMessage } from '../errors';
@@ -12,8 +12,16 @@ import GroupSelect from './GroupSelect';
 import GuestsPreview from './pages/GuestsPreview';
 import MainInfo from './pages/MainInfo';
 import { isPastDate } from '../dates';
+import { palette as appPalette } from '../theme/palette';
 
 const STEPS = ['Основна информация', 'Гости'];
+
+/** A new invitation starts in the app's own colours: ink for the text, with a gold accent. */
+const DEFAULT_COLORS: InvitationColors = {
+    colors: [appPalette.ink.main, appPalette.primary.main].map((color) => color.toLowerCase()),
+    primaryColor: 0,
+    secondaryColor: 1,
+};
 
 interface BuilderProps {
     /** The event whose invitation is created, or edited if it already has one. */
@@ -28,13 +36,14 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
     const [groups, setGroups] = useState<GuestGroup[]>([]);
     // The group whose personal invitation the preview shows on the guests step.
     const [previewGroupId, setPreviewGroupId] = useState<number | null>(null);
+    const [previewGuestId, setPreviewGuestId] = useState<number | null>(null);
     const [fields, setFields] = useState<FormFields>({ showName: true, showAnswer: true });
     const [details, setDetails] = useState<InvitationDetails>({
         brideName: '',
         groomName: '',
         weddingDate: '',
         place: '',
-        colors: ['#ffffff'],
+        ...DEFAULT_COLORS,
         invitationText: '',
     });
     const [loaded, setLoaded] = useState(false);
@@ -90,6 +99,8 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                         weddingDate: invitation.weddingDate,
                         place: invitation.place,
                         colors: invitation.colors,
+                        primaryColor: invitation.primaryColor,
+                        secondaryColor: invitation.secondaryColor,
                         invitationText: invitation.invitationText,
                     });
                 }
@@ -109,7 +120,10 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
     const canSave = !saving && detailsComplete && (fields.showName || fields.showAnswer);
     const selectedGroup = groups.find((group) => group.id === previewGroupId);
     // The cover page greets the selected group on every step; its answer form shows only on the guests step.
-    const selectedGuests = selectedGroup ? guestsOf(selectedGroup, guests) : [];
+    const soloGuest = guests.find(
+        (guest) => guest.id === previewGuestId && !groups.some((group) => group.guestIds.includes(guest.id)),
+    );
+    const selectedGuests = soloGuest ? [soloGuest] : selectedGroup ? guestsOf(selectedGroup, guests) : [];
     const previewGroup = activeStep === 1 ? selectedGroup : undefined;
     const previewGuests = previewGroup ? selectedGuests : [];
 
@@ -148,7 +162,15 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                             groups={groups}
                             guests={guests}
                             selectedId={previewGroupId}
-                            onSelect={setPreviewGroupId}
+                            selectedGuestId={previewGuestId}
+                            onSelect={(id) => {
+                                setPreviewGuestId(null);
+                                setPreviewGroupId(id);
+                            }}
+                            onSelectGuest={(id) => {
+                                setPreviewGroupId(null);
+                                setPreviewGuestId(id);
+                            }}
                         />
                     </>
                 )}
@@ -158,7 +180,10 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                         groups={groups}
                         guests={guests}
                         selectedId={previewGroupId}
-                        onSelect={setPreviewGroupId}
+                        onSelect={(id) => {
+                            setPreviewGuestId(null);
+                            setPreviewGroupId(id);
+                        }}
                     />
                 )}
 

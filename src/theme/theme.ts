@@ -1,9 +1,9 @@
 ﻿import { alpha, createTheme } from '@mui/material/styles';
 import type { CSSProperties } from 'react';
 import { palette } from './palette';
-import { defaultTypography, fontFamily } from './typography';
+import { defaultTypography, scriptFont } from './typography';
 
-export const scriptFont = "'Civil Manuscript', 'Cormorant Garamond', Georgia, serif";
+export { scriptFont };
 
 
 declare module '@mui/material/styles' {
@@ -35,9 +35,9 @@ export const theme = createTheme({
     button: { textTransform: 'none', fontWeight: 600, letterSpacing: '0.03em' },
     // Gold leaf: banded gradient clipped to the glyphs, with a soft drop shadow for depth.
     metallic: {
-      fontFamily: fontFamily,
-      fontWeight: 700,
-      fontSize: '2.25rem',
+      fontFamily: scriptFont,
+      fontWeight: 400,
+      fontSize: '4rem',
       lineHeight: 1.2,
       letterSpacing: '0.02em',
       display: 'inline-block',

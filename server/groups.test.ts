@@ -18,7 +18,9 @@ const form: PublishedForm = {
   groomName: 'Иван',
   weddingDate: '2027-06-12',
   place: 'Пловдив',
-  colors: ['#ffffff'],
+  colors: ['#6b6254', '#c9a227'],
+  primaryColor: 0,
+  secondaryColor: 1,
   invitationText: '',
 };
 

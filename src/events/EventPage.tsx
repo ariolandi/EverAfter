@@ -37,6 +37,7 @@ import CoownersPanel from './CoownersPanel';
 import GuestGroupsPanel from './GuestGroupsPanel';
 import { loadEvent } from './loadEvent';
 import MenusPanel from './MenusPanel';
+import SchedulePanel from './SchedulePanel';
 
 interface EventPageProps {
     eventId: number;
@@ -45,7 +46,7 @@ interface EventPageProps {
     onEditInvitation: () => void;
 }
 
-/** One event: its guest list, guest groups, menus and invitation. */
+/** One event: its guest list, guest groups, menus, schedule and invitation. */
 export default function EventPage({ eventId, onBack, onEditInvitation }: EventPageProps) {
     const [event, setEvent] = useState<EventInfo | null>(null);
     const [guests, setGuests] = useState<Guest[]>([]);
@@ -226,6 +227,8 @@ export default function EventPage({ eventId, onBack, onEditInvitation }: EventPa
                     />
 
                     <MenusPanel eventId={eventId} childCount={childCount} />
+
+                    <SchedulePanel eventId={eventId} />
 
                     <CoownersPanel event={event} />
                 </Box>

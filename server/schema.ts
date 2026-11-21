@@ -1,3 +1,4 @@
+import type { ColorUsage, DressCode } from '../shared/types.js';
 import {
   boolean,
   customType,
@@ -138,6 +139,22 @@ export const menus = pgTable(
   (t) => [index('menus_event_id').on(t.eventId)],
 );
 
+// The parts of an event's programme. `startTime` is a 24-hour HH:MM string, so it sorts chronologically as text.
+export const scheduleItems = pgTable(
+  'schedule_items',
+  {
+    id: serial('id').primaryKey(),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    startTime: text('start_time').notNull(),
+    place: text('place').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('schedule_items_event_id').on(t.eventId)],
+);
+
 export const forms = pgTable('forms', {
   id: serial('id').primaryKey(),
   userId: integer('user_id')
@@ -157,7 +174,12 @@ export const forms = pgTable('forms', {
   weddingDate: text('wedding_date').notNull(),
   place: text('place').notNull(),
   colors: jsonb('colors').$type<string[]>().notNull(),
+  // Indexes into `colors` of the colours marked primary and secondary.
+  primaryColor: integer('primary_color').notNull().default(0),
+  secondaryColor: integer('secondary_color').notNull().default(0),
   invitationText: text('invitation_text').notNull().default(''),
+  dressCode: text('dress_code').$type<DressCode>().notNull().default('cocktail'),
+  colorUsage: text('color_usage').$type<ColorUsage>().notNull().default('informative'),
   createdAt: createdAt(),
 });
 

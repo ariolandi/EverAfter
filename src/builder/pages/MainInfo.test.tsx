@@ -14,6 +14,8 @@ function Harness() {
         weddingDate: '',
         place: '',
         colors: ['#ffffff'],
+        primaryColor: 0,
+        secondaryColor: 0,
         invitationText: '',
     });
     const [fields, setFields] = useState<FormFields>({ showName: true, showAnswer: true });
@@ -42,6 +44,9 @@ describe('MainInfo', () => {
             weddingDate: '2027-06-12',
             place: 'Пловдив',
             colors: ['#ffffff', '#ffffff'],
+            // Adding a second colour gives it the secondary mark.
+            primaryColor: 0,
+            secondaryColor: 1,
             invitationText: 'Скъпи гости,\nочакваме ви!',
         });
     });

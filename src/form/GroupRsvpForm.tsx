@@ -66,7 +66,7 @@ export default function GroupRsvpForm({ fields, guests, response, onSubmit }: Gr
                 {guests.length === 0 && <Alert severity="warning">В тази покана все още няма гости.</Alert>}
                 {guests.map((guest) => (
                     <Stack key={guest.id} spacing={0.5}>
-                        <Typography sx={{ fontWeight: 600 }}>{guest.name}</Typography>
+                        <Typography className="guest-name" sx={{ fontWeight: 600 }}>{guest.name}</Typography>
                         {fields.showAnswer && (
                             <AttendanceToggle
                                 aria-label={`Отговор за ${guest.name}`}

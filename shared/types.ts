@@ -25,17 +25,40 @@ export interface FormFields {
   showAnswer: boolean;
 }
 
-export interface InvitationDetails {
+/**
+ * An invitation's theme colours, with exactly one marked primary and one secondary.
+ * The two marks are on different colours whenever there is more than one.
+ */
+export interface InvitationColors {
+  /** Theme colours as #rrggbb hex strings. */
+  colors: string[];
+  /** Index in `colors` of the primary colour, which the invitation's text is written in. */
+  primaryColor: number;
+  /** Index in `colors` of the secondary colour. */
+  secondaryColor: number;
+}
+
+/** How formal the dress code is. */
+export const DRESS_CODES = ['cocktail', 'formal'] as const;
+export type DressCode = (typeof DRESS_CODES)[number];
+
+/** How strictly guests are asked to wear the invitation's colours. */
+export const COLOR_USAGES = ['mandatory', 'suggested', 'informative'] as const;
+export type ColorUsage = (typeof COLOR_USAGES)[number];
+
+export interface InvitationDetails extends InvitationColors {
   brideName: string;
   groomName: string;
   /** Wedding date as YYYY-MM-DD, or '' when not set. */
   weddingDate: string;
   /** Where the wedding takes place. */
   place: string;
-  /** Theme colours as #rrggbb hex strings. */
-  colors: string[];
   /** Free text of the invitation, shown on its first page; '' when not set. */
   invitationText: string;
+  /** Dress code shown on the invitation's schedule page. */
+  dressCode: DressCode;
+  /** Whether guests must, are advised to, or are just told about wearing the colours. */
+  colorUsage: ColorUsage;
 }
 
 export const MAX_INVITATION_TEXT_LENGTH = 2000;
@@ -58,6 +81,11 @@ export interface PublishedForm extends FormFields, InvitationDetails {
   slug: string;
   imageId: number | null;
   imageUrl: string | null;
+}
+
+/** An invitation as a guest sees it: with the event's schedule for its schedule page. */
+export interface SharedInvitation extends PublishedForm {
+  schedule: ScheduleItem[];
 }
 
 export interface EventInfo {
@@ -119,6 +147,22 @@ export interface Menu extends MenuInput {
   createdAt: string;
 }
 
+/** The shape of a schedule item's start time: 24-hour HH:MM. */
+export const SCHEDULE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export interface ScheduleItemInput {
+  title: string;
+  /** Starting hour as 24-hour HH:MM. */
+  startTime: string;
+  place: string;
+}
+
+/** One part of the event's programme, e.g. the ceremony or the dinner. */
+export interface ScheduleItem extends ScheduleItemInput {
+  id: number;
+  createdAt: string;
+}
+
 export interface FormResponseInput {
   name?: string;
   answer?: boolean;
@@ -169,6 +213,7 @@ export interface GuestGroupInput {
 /** What a group's personal link shows: the invitation, who it is for, and their answer if already sent. */
 export interface GroupInvitation {
   form: PublishedForm;
+  schedule: ScheduleItem[];
   groupName: string;
   guests: { id: number; name: string }[];
   response: GroupResponse | null;

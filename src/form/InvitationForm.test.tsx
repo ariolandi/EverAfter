@@ -2,6 +2,7 @@ import { screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { publishedForm } from '../test/fixtures';
 import { renderWithTheme } from '../test/render';
+import GroupRsvpForm from './GroupRsvpForm';
 import InvitationForm from './InvitationForm';
 
 const form = publishedForm();
@@ -15,8 +16,50 @@ describe('InvitationForm', () => {
         expect(screen.getByRole('heading', { name: 'Сватба' })).toBeInTheDocument();
         expect(screen.getByText(/12 юни 2027/)).toBeInTheDocument();
         expect(screen.getByText('Пловдив')).toBeInTheDocument();
-        expect(screen.getByText('Нека заедно отбележим празника!')).toBeInTheDocument();
+        expect(screen.getByText('Нека заедно отбележим този щастлив момент!')).toBeInTheDocument();
         expect(screen.getByText('Мария & Иван')).toBeInTheDocument();
+    });
+
+    it('writes its text in the primary colour', () => {
+        const details = { ...form, colors: ['#111111', '#123456', '#654321'], primaryColor: 1, secondaryColor: 2 };
+        renderWithTheme(<InvitationForm fields={form} details={details} imageUrl={null} guestNames={['Петър']} />);
+        for (const text of ['Скъпи', 'Пловдив', 'Нека заедно отбележим този щастлив момент!']) {
+            expect(screen.getByText(text)).toHaveStyle({ color: '#123456' });
+        }
+        // The guests' names are in the secondary colour.
+        expect(screen.getByText('Петър')).toHaveStyle({ color: '#654321' });
+    });
+
+    it('keeps the primary and secondary colours on the answer page', () => {
+        const details = { ...form, colors: ['#111111', '#123456', '#654321'], primaryColor: 1, secondaryColor: 2 };
+        renderWithTheme(
+            <InvitationForm
+                fields={form}
+                details={details}
+                imageUrl={null}
+                guestNames={['Петър']}
+                responseForm={<GroupRsvpForm fields={form} guests={[{ id: 1, name: 'Петър Петров' }]} response={null} />}
+            />,
+        );
+        expect(screen.getByText('Петър Петров')).toHaveStyle({ color: '#654321' });
+    });
+
+    it('sets the greeting, the guests, the date and the place in italics', () => {
+        renderWithTheme(<InvitationForm fields={form} details={form} imageUrl={null} />);
+        expect(screen.getByText('гости')).toHaveStyle({ fontStyle: 'italic' });
+        expect(screen.getByText(/12 юни 2027/)).toHaveStyle({ fontStyle: 'italic' });
+        expect(screen.getByText('Пловдив')).toHaveStyle({ fontStyle: 'italic' });
+        expect(screen.getByText('Скъпи')).toHaveStyle({ fontStyle: 'italic' });
+        expect(screen.getByRole('heading', { name: 'Сватба' })).not.toHaveStyle({ fontStyle: 'italic' });
+    });
+
+    it('sets off the guests and the place with a gold rule each', () => {
+        const { container } = renderWithTheme(<InvitationForm fields={form} details={form} imageUrl={null} />);
+        const rules = Array.from(container.querySelectorAll('hr'));
+        expect(rules).toHaveLength(2);
+        const [afterGuests, afterPlace] = rules;
+        expect(afterGuests.previousElementSibling).toHaveTextContent('гости');
+        expect(afterPlace.previousElementSibling).toHaveTextContent('Пловдив');
     });
 
     it('greets a group by first names in the plural', () => {

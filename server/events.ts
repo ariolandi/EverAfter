@@ -6,9 +6,12 @@ import {
   MAX_EMAIL_LENGTH,
   MAX_GROUP_SIZE,
   MAX_NAME_LENGTH,
+  MAX_PLACE_LENGTH,
   MENU_COURSE_KEYS,
+  SCHEDULE_TIME_PATTERN,
   type MenuCourses,
   type MenuInput,
+  type ScheduleItemInput,
 } from '../shared/types.js';
 import { requireUser } from './auth.js';
 import {
@@ -18,21 +21,25 @@ import {
   createGroup,
   createGuest,
   createMenu,
+  createScheduleItem,
   deleteCoowner,
   deleteEvent,
   deleteGroup,
   deleteGuest,
   deleteMenu,
+  deleteScheduleItem,
   getEvent,
   listCoowners,
   listEvents,
   listGroups,
   listGuests,
   listMenus,
+  listScheduleItems,
   normalizeEmail,
   setGuestIsChild,
   updateGroup,
   updateMenu,
+  updateScheduleItem,
 } from './db.js';
 
 export const eventRouter = Router();
@@ -59,11 +66,11 @@ async function findOwnedEvent(req: Request<{ id: string }>, res: Response) {
   return event;
 }
 
-/** Responds 400 and returns undefined unless the body has a valid name. */
-function parseName(req: Request, res: Response) {
-  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+/** Responds 400 and returns undefined unless the body has a valid name (under `field`, "name" by default). */
+function parseName(req: Request, res: Response, field = 'name') {
+  const name = typeof req.body?.[field] === 'string' ? (req.body[field] as string).trim() : '';
   if (!name || name.length > MAX_NAME_LENGTH) {
-    res.status(HttpStatus.BAD_REQUEST).json({ error: `name must be 1-${MAX_NAME_LENGTH} characters` });
+    res.status(HttpStatus.BAD_REQUEST).json({ error: `${field} must be 1-${MAX_NAME_LENGTH} characters` });
     return undefined;
   }
   return name as string;
@@ -288,6 +295,60 @@ eventRouter.delete('/:id/menus/:menuId', async (req, res) => {
   const menuId = Number(req.params.menuId);
   if (!Number.isInteger(menuId) || !(await deleteMenu(event.id, menuId))) {
     res.status(HttpStatus.NOT_FOUND).json({ error: 'menu not found' });
+    return;
+  }
+  res.status(HttpStatus.NO_CONTENT).end();
+});
+
+/** Validates a schedule item body, or responds 400 and returns undefined. Title, start time and place are all required. */
+function parseScheduleItemInput(req: Request, res: Response): ScheduleItemInput | undefined {
+  const title = parseName(req, res, 'title');
+  if (!title) return undefined;
+  const startTime: unknown = req.body?.startTime;
+  if (typeof startTime !== 'string' || !SCHEDULE_TIME_PATTERN.test(startTime)) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: 'startTime must be a time as HH:MM' });
+    return undefined;
+  }
+  const place = typeof req.body?.place === 'string' ? req.body.place.trim() : '';
+  if (!place || place.length > MAX_PLACE_LENGTH) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: `place must be 1-${MAX_PLACE_LENGTH} characters` });
+    return undefined;
+  }
+  return { title, startTime, place };
+}
+
+eventRouter.get('/:id/schedule', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (event) res.json(await listScheduleItems(event.id));
+});
+
+eventRouter.post('/:id/schedule', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const input = parseScheduleItemInput(req, res);
+  if (input) res.status(HttpStatus.CREATED).json(await createScheduleItem(event.id, input));
+});
+
+eventRouter.put('/:id/schedule/:itemId', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const input = parseScheduleItemInput(req, res);
+  if (!input) return;
+  const itemId = Number(req.params.itemId);
+  const item = Number.isInteger(itemId) ? await updateScheduleItem(event.id, itemId, input) : undefined;
+  if (!item) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'schedule item not found' });
+    return;
+  }
+  res.json(item);
+});
+
+eventRouter.delete('/:id/schedule/:itemId', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const itemId = Number(req.params.itemId);
+  if (!Number.isInteger(itemId) || !(await deleteScheduleItem(event.id, itemId))) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'schedule item not found' });
     return;
   }
   res.status(HttpStatus.NO_CONTENT).end();

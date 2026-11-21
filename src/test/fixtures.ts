@@ -1,4 +1,4 @@
-import type { EventInfo, Guest, GuestGroup, Menu, PublishedForm } from '../../shared/types';
+import type { EventInfo, Guest, GuestGroup, Menu, PublishedForm, ScheduleItem } from '../../shared/types';
 
 export const publishedForm = (overrides: Partial<PublishedForm> = {}): PublishedForm => ({
     slug: 'abc123',
@@ -10,7 +10,9 @@ export const publishedForm = (overrides: Partial<PublishedForm> = {}): Published
     groomName: 'Иван',
     weddingDate: '2027-06-12',
     place: 'Пловдив',
-    colors: ['#ffffff'],
+    colors: ['#6b6254', '#c9a227'],
+    primaryColor: 0,
+    secondaryColor: 1,
     invitationText: '',
     ...overrides,
 });
@@ -51,6 +53,15 @@ export const menu = (overrides: Partial<Menu> = {}): Menu => ({
     salad: 'Шопска салата',
     appetizer: 'Пълнени чушки',
     mainCourse: 'Свинско с картофи',
+    createdAt: '2026-11-01T10:00:00.000Z',
+    ...overrides,
+});
+
+export const scheduleItem = (overrides: Partial<ScheduleItem> = {}): ScheduleItem => ({
+    id: 30,
+    title: 'Церемония',
+    startTime: '15:00',
+    place: 'Градината на хотела',
     createdAt: '2026-11-01T10:00:00.000Z',
     ...overrides,
 });

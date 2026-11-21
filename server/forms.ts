@@ -2,12 +2,17 @@ import crypto from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { HttpStatus } from '../shared/httpStatus.js';
 import {
+  COLOR_USAGES,
+  DRESS_CODES,
   MAX_COLORS,
   MAX_INVITATION_TEXT_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PLACE_LENGTH,
+  type ColorUsage,
+  type DressCode,
   type FormFields,
   type InvitationDetails,
+  type SharedInvitation,
 } from '../shared/types.js';
 import { requireUser } from './auth.js';
 import {
@@ -18,6 +23,7 @@ import {
   getForm,
   getFormImage,
   getImageFile,
+  listScheduleItems,
   updateForm,
 } from './db.js';
 
@@ -70,11 +76,33 @@ async function parseFormInput<P>(
     res.status(HttpStatus.BAD_REQUEST).json({ error: `colors must be 1-${MAX_COLORS} #rrggbb values` });
     return;
   }
+  const { primaryColor, secondaryColor } = req.body ?? {};
+  const isColorIndex = (index: unknown) =>
+    typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < colors.length;
+  if (
+    !isColorIndex(primaryColor) ||
+    !isColorIndex(secondaryColor) ||
+    (colors.length > 1 && primaryColor === secondaryColor)
+  ) {
+    res
+      .status(HttpStatus.BAD_REQUEST)
+      .json({ error: 'mark one of the colors as primary and a different one as secondary' });
+    return;
+  }
   const invitationText = typeof req.body?.invitationText === 'string' ? req.body.invitationText.trim() : '';
   if (invitationText.length > MAX_INVITATION_TEXT_LENGTH) {
     res
       .status(HttpStatus.BAD_REQUEST)
       .json({ error: `invitationText must be at most ${MAX_INVITATION_TEXT_LENGTH} characters` });
+    return;
+  }
+  const { dressCode, colorUsage } = req.body ?? {};
+  if (!DRESS_CODES.includes(dressCode)) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: `dressCode must be one of: ${DRESS_CODES.join(', ')}` });
+    return;
+  }
+  if (!COLOR_USAGES.includes(colorUsage)) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: `colorUsage must be one of: ${COLOR_USAGES.join(', ')}` });
     return;
   }
   if (
@@ -88,7 +116,18 @@ async function parseFormInput<P>(
   return {
     imageId,
     fields: { showName, showAnswer },
-    details: { brideName, groomName, weddingDate, place, colors: colors as string[], invitationText },
+    details: {
+      brideName,
+      groomName,
+      weddingDate,
+      place,
+      colors: colors as string[],
+      primaryColor,
+      secondaryColor,
+      invitationText,
+      dressCode: dressCode as DressCode,
+      colorUsage: colorUsage as ColorUsage,
+    },
   };
 }
 
@@ -138,7 +177,8 @@ formRouter.get('/:slug', async (req, res) => {
     res.status(HttpStatus.NOT_FOUND).json({ error: 'form not found' });
     return;
   }
-  res.json(found.form);
+  const invitation: SharedInvitation = { ...found.form, schedule: await listScheduleItems(found.eventId) };
+  res.json(invitation);
 });
 
 formRouter.get('/:slug/image', async (req, res) => {

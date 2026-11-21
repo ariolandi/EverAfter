@@ -16,6 +16,8 @@ import type {
   Menu,
   MenuInput,
   PublishedForm,
+  ScheduleItem,
+  ScheduleItemInput,
   Task,
   User,
 } from '../shared/types';
@@ -84,6 +86,13 @@ export const api = {
     request<Menu>(`/api/events/${eventId}/menus/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
   deleteMenu: (eventId: number, id: number) =>
     request<void>(`/api/events/${eventId}/menus/${id}`, { method: 'DELETE' }),
+  listSchedule: (eventId: number) => request<ScheduleItem[]>(`/api/events/${eventId}/schedule`),
+  createScheduleItem: (eventId: number, input: ScheduleItemInput) =>
+    request<ScheduleItem>(`/api/events/${eventId}/schedule`, { method: 'POST', body: JSON.stringify(input) }),
+  updateScheduleItem: (eventId: number, id: number, input: ScheduleItemInput) =>
+    request<ScheduleItem>(`/api/events/${eventId}/schedule/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteScheduleItem: (eventId: number, id: number) =>
+    request<void>(`/api/events/${eventId}/schedule/${id}`, { method: 'DELETE' }),
   getGroupInvitation: (token: string) => request<GroupInvitation>(`/api/groups/${encodeURIComponent(token)}`),
   submitGroupResponse: (token: string, response: GroupResponseInput) =>
     request<GroupResponse>(`/api/groups/${encodeURIComponent(token)}/responses`, {

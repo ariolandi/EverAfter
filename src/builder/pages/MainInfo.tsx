@@ -1,7 +1,14 @@
 import type { Dispatch, SetStateAction } from "react"
-import { Stack, TextField, Typography } from "@mui/material"
-import type { InvitationDetails, FormFields } from "../../../shared/types"
+import { InputBase, Paper, Stack, TextField, Typography } from "@mui/material"
+import {
+    MAX_INVITATION_TEXT_LENGTH,
+    MAX_NAME_LENGTH,
+    MAX_PLACE_LENGTH,
+    type InvitationDetails,
+    type FormFields,
+} from "../../../shared/types"
 import ColorPalette from "../ColorPalette"
+import DateField from "../DateField"
 
 interface MainInfoProps {
     details: InvitationDetails
@@ -19,7 +26,7 @@ export default function MainInfo({ details, setDetails }: MainInfoProps) {
                     label="Булка"
                     value={details.brideName}
                     onChange={(e) => setDetails((current) => ({ ...current, brideName: e.target.value }))}
-                    slotProps={{ htmlInput: { maxLength: 100 } }}
+                    slotProps={{ htmlInput: { maxLength: MAX_NAME_LENGTH } }}
                     size="small"
                     fullWidth
                 />
@@ -29,19 +36,18 @@ export default function MainInfo({ details, setDetails }: MainInfoProps) {
                     label="Младоженец"
                     value={details.groomName}
                     onChange={(e) => setDetails((current) => ({ ...current, groomName: e.target.value }))}
-                    slotProps={{ htmlInput: { maxLength: 100 } }}
+                    slotProps={{ htmlInput: { maxLength: MAX_NAME_LENGTH } }}
                     size="small"
                     fullWidth
                 />
             </Stack>
             <Stack direction="row" spacing={2}>
-                <TextField
+                <DateField
                     required
                     label="Дата на сватбата"
-                    type="date"
+                    disablePast
                     value={details.weddingDate}
-                    onChange={(e) => setDetails((current) => ({ ...current, weddingDate: e.target.value }))}
-                    slotProps={{ inputLabel: { shrink: true } }}
+                    onChange={(weddingDate) => setDetails((current) => ({ ...current, weddingDate }))}
                     size="small"
                     sx={{ flexShrink: 0, width: 240 }}
                 />
@@ -50,7 +56,7 @@ export default function MainInfo({ details, setDetails }: MainInfoProps) {
                     label="Място"
                     value={details.place}
                     onChange={(e) => setDetails((current) => ({ ...current, place: e.target.value }))}
-                    slotProps={{ htmlInput: { maxLength: 200 } }}
+                    slotProps={{ htmlInput: { maxLength: MAX_PLACE_LENGTH } }}
                     size="small"
                     fullWidth
                 />

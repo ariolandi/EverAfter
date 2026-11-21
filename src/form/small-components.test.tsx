@@ -4,7 +4,7 @@ import { renderWithTheme } from '../test/render';
 import { answerLabel } from './answers';
 import ConfirmSubmitDialog from './ConfirmSubmitDialog';
 import GroupAnswer from './GroupAnswer';
-import ShareLinkField from './ShareLinkField';
+import ShareLinkField from '../components/ShareLinkField';
 import SubmitSuccess from './SubmitSuccess';
 import { groupShareUrlFor, shareUrlFor } from './shareUrl';
 

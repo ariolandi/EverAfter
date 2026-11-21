@@ -157,6 +157,7 @@ export const forms = pgTable('forms', {
   weddingDate: text('wedding_date').notNull(),
   place: text('place').notNull(),
   colors: jsonb('colors').$type<string[]>().notNull(),
+  invitationText: text('invitation_text').notNull().default(''),
   createdAt: createdAt(),
 });
 

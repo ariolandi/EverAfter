@@ -1,16 +1,8 @@
-import { useState, type FormEvent } from 'react';
-import {
-    Alert,
-    Button,
-    Checkbox,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    FormControlLabel,
-    TextField,
-} from '@mui/material';
-import type { Menu, MenuCourses, MenuInput } from '../../shared/types';
+import { useState } from 'react';
+import { Checkbox, FormControlLabel, TextField } from '@mui/material';
+import { MAX_DISH_LENGTH, MAX_NAME_LENGTH, type Menu, type MenuCourses, type MenuInput } from '../../shared/types';
+import FormDialog from '../components/FormDialog';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 import { MENU_COURSES } from './menuCourses';
 
 interface MenuDialogProps {
@@ -29,83 +21,65 @@ export default function MenuDialog({ menu, onCancel, onSave }: MenuDialogProps) 
         appetizer: menu?.appetizer ?? '',
         mainCourse: menu?.mainCourse ?? '',
     });
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const saving = useAsyncAction();
 
     const complete = Boolean(name.trim()) && MENU_COURSES.every(({ key }) => courses[key].trim());
 
-    const save = async (event: FormEvent) => {
-        event.preventDefault();
-        if (!complete) return;
-        setSaving(true);
-        setError(null);
-        try {
-            await onSave({
+    const save = () =>
+        void saving.run(() =>
+            onSave({
                 name: name.trim(),
                 isChild,
                 salad: courses.salad.trim(),
                 appetizer: courses.appetizer.trim(),
                 mainCourse: courses.mainCourse.trim(),
-            });
-        } catch (e) {
-            setError((e as Error).message);
-            setSaving(false);
-        }
-    };
+            }),
+        );
 
     return (
-        <Dialog
-            open
-            onClose={onCancel}
-            fullWidth
-            maxWidth="sm"
-            slotProps={{ paper: { component: 'form', onSubmit: save } }}
+        <FormDialog
+            title={menu ? 'Редактиране на меню' : 'Ново меню'}
+            onCancel={onCancel}
+            onSubmit={save}
+            canSubmit={complete}
+            saving={saving.pending}
+            error={saving.error}
         >
-            <DialogTitle>{menu ? 'Редактиране на меню' : 'Ново меню'}</DialogTitle>
-            <DialogContent>
+            <TextField
+                autoFocus
+                required
+                label="Име на менюто"
+                placeholder="напр. Вегетарианско меню"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                slotProps={{ htmlInput: { maxLength: MAX_NAME_LENGTH } }}
+                fullWidth
+                margin="dense"
+                disabled={saving.pending}
+            />
+            <FormControlLabel
+                control={
+                    <Checkbox
+                        checked={isChild}
+                        onChange={(e) => setIsChild(e.target.checked)}
+                        disabled={saving.pending}
+                    />
+                }
+                label="Детско меню"
+            />
+            {MENU_COURSES.map(({ key, label }) => (
                 <TextField
-                    autoFocus
+                    key={key}
                     required
-                    label="Име на менюто"
-                    placeholder="напр. Вегетарианско меню"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    slotProps={{ htmlInput: { maxLength: 100 } }}
+                    label={label}
+                    value={courses[key]}
+                    onChange={(e) => setCourses((current) => ({ ...current, [key]: e.target.value }))}
+                    slotProps={{ htmlInput: { maxLength: MAX_DISH_LENGTH } }}
                     fullWidth
                     margin="dense"
-                    disabled={saving}
+                    disabled={saving.pending}
                 />
-                <FormControlLabel
-                    control={
-                        <Checkbox checked={isChild} onChange={(e) => setIsChild(e.target.checked)} disabled={saving} />
-                    }
-                    label="Детско меню"
-                />
-                {MENU_COURSES.map(({ key, label }) => (
-                    <TextField
-                        key={key}
-                        required
-                        label={label}
-                        value={courses[key]}
-                        onChange={(e) => setCourses((current) => ({ ...current, [key]: e.target.value }))}
-                        slotProps={{ htmlInput: { maxLength: 200 } }}
-                        fullWidth
-                        margin="dense"
-                        disabled={saving}
-                    />
-                ))}
-                {error && (
-                    <Alert severity="error" sx={{ mt: 1 }}>
-                        {error}
-                    </Alert>
-                )}
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onCancel}>Отказ</Button>
-                <Button type="submit" variant="contained" disabled={saving || !complete}>
-                    Запази
-                </Button>
-            </DialogActions>
-        </Dialog>
+            ))}
+        </FormDialog>
     );
 }

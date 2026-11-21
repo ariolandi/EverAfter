@@ -26,7 +26,8 @@ describe('GroupInvite', () => {
 
         expect(await screen.findByText('Мария & Иван')).toBeInTheDocument();
         expect(api.getGroupInvitation).toHaveBeenCalledWith('grp-token');
-        expect(screen.getByText('Семейство Иванови')).toBeInTheDocument();
+        // Greeted by first name on the cover; each guest's full name heads their answer.
+        expect(screen.getByText('Иван и Мария')).toBeInTheDocument();
         expect(screen.getByText('Иван Иванов')).toBeInTheDocument();
         expect(screen.getByText('Мария Иванова')).toBeInTheDocument();
     });

@@ -1,25 +1,19 @@
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react';
-import {
-    Alert,
-    Box,
-    Button,
-    CircularProgress,
-    Divider,
-    Snackbar,
-    Stack,
-    Step,
-    StepButton,
-    Stepper,
-    TextField,
-    Typography,
-} from '@mui/material';
-import type { InvitationDetails, FormFields, GeneratedImage } from '../../shared/types';
+import { useEffect, useState } from 'react';
+import { Alert, Box, Button, Divider, Snackbar, Stack, Step, StepButton, Stepper, Typography } from '@mui/material';
+import type { InvitationDetails, FormFields, Guest, GuestGroup } from '../../shared/types';
 import { api } from '../api';
+import BackButton from '../components/BackButton';
+import { errorMessage } from '../errors';
+import { loadEvent } from '../events/loadEvent';
+import GroupRsvpForm from '../form/GroupRsvpForm';
+import { guestsOf } from '../form/guestNames';
 import InvitationForm from '../form/InvitationForm';
+import GroupSelect from './GroupSelect';
+import GuestsPreview from './pages/GuestsPreview';
 import MainInfo from './pages/MainInfo';
-import ArrowBack from '@mui/icons-material/ArrowBack';
+import { isPastDate } from '../dates';
 
-const STEPS = ['Основна информация', 'Изображение'];
+const STEPS = ['Основна информация', 'Гости'];
 
 interface BuilderProps {
     /** The event whose invitation is created, or edited if it already has one. */
@@ -29,11 +23,11 @@ interface BuilderProps {
 
 export default function Builder({ eventId, onBack }: BuilderProps) {
     const [activeStep, setActiveStep] = useState(0);
-    const [images, setImages] = useState<GeneratedImage[]>([]);
-    const [prompt, setPrompt] = useState('');
-    const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [selectedId, setSelectedId] = useState<number | null>(null);
+    const [guests, setGuests] = useState<Guest[]>([]);
+    const [groups, setGroups] = useState<GuestGroup[]>([]);
+    // The group whose personal invitation the preview shows on the guests step.
+    const [previewGroupId, setPreviewGroupId] = useState<number | null>(null);
     const [fields, setFields] = useState<FormFields>({ showName: true, showAnswer: true });
     const [details, setDetails] = useState<InvitationDetails>({
         brideName: '',
@@ -41,18 +35,17 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
         weddingDate: '',
         place: '',
         colors: ['#ffffff'],
+        invitationText: '',
     });
     const [loaded, setLoaded] = useState(false);
     // Slug of the event's saved invitation; null until it is first saved.
     const [slug, setSlug] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [savedNotice, setSavedNotice] = useState(false);
-    // The saved invitation's image. It may belong to another owner of the event, so it isn't always in `images`.
+    // The saved invitation's image, kept as it is on every save.
     const [savedImage, setSavedImage] = useState<{ id: number; url: string } | null>(null);
-    // A new invitation defaults to the latest image; a saved one keeps exactly the image it was saved with.
-    const selected = images.find((image) => image.id === selectedId) ?? (slug ? undefined : images[0]);
-    const imageId = selected?.id ?? (slug ? selectedId : null);
-    const imageUrl = selected?.url ?? (savedImage && savedImage.id === imageId ? savedImage.url : null);
+    const imageId = savedImage?.id ?? null;
+    const imageUrl = savedImage?.url ?? null;
 
     /** Saves the invitation; resolves to whether the save succeeded. */
     const save = async (): Promise<boolean> => {
@@ -63,12 +56,11 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                 ? await api.updateForm(slug, imageId, fields, details)
                 : await api.publishForm(eventId, imageId, fields, details);
             setSlug(form.slug);
-            setSelectedId(form.imageId);
             setSavedImage(form.imageId !== null && form.imageUrl ? { id: form.imageId, url: form.imageUrl } : null);
             setSavedNotice(true);
             return true;
         } catch (e) {
-            setError((e as Error).message);
+            setError(errorMessage(e));
             return false;
         } finally {
             setSaving(false);
@@ -80,13 +72,14 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
     };
 
     useEffect(() => {
-        Promise.all([api.listImages(), api.getEvent(eventId)])
-            .then(([loadedImages, event]) => {
-                setImages(loadedImages);
+        loadEvent(eventId)
+            .then(({ event, guests: loadedGuests, groups: loadedGroups }) => {
+                setGuests(loadedGuests);
+                setGroups(loadedGroups);
+                setPreviewGroupId(loadedGroups[0]?.id ?? null);
                 const { invitation } = event;
                 if (invitation) {
                     setSlug(invitation.slug);
-                    setSelectedId(invitation.imageId);
                     if (invitation.imageId !== null && invitation.imageUrl) {
                         setSavedImage({ id: invitation.imageId, url: invitation.imageUrl });
                     }
@@ -97,45 +90,28 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                         weddingDate: invitation.weddingDate,
                         place: invitation.place,
                         colors: invitation.colors,
+                        invitationText: invitation.invitationText,
                     });
                 }
                 setLoaded(true);
             })
-            .catch((e: Error) => setError(e.message));
+            .catch((e) => setError(errorMessage(e)));
     }, [eventId]);
-
-    const generate = async (event?: FormEvent) => {
-        event?.preventDefault();
-        if (!prompt.trim() || generating) return;
-        setGenerating(true);
-        setError(null);
-        try {
-            const image = await api.generateImage(prompt);
-            setImages((current) => [image, ...current]);
-            setSelectedId(image.id);
-            setPrompt('');
-        } catch (e) {
-            setError((e as Error).message);
-        } finally {
-            setGenerating(false);
-        }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            void generate();
-        }
-    };
 
     const detailsComplete = Boolean(
         details.brideName.trim() &&
             details.groomName.trim() &&
             details.weddingDate &&
+            !isPastDate(details.weddingDate) &&
             details.place.trim() &&
             details.colors.length > 0,
     );
     const canSave = !saving && detailsComplete && (fields.showName || fields.showAnswer);
+    const selectedGroup = groups.find((group) => group.id === previewGroupId);
+    // The cover page greets the selected group on every step; its answer form shows only on the guests step.
+    const selectedGuests = selectedGroup ? guestsOf(selectedGroup, guests) : [];
+    const previewGroup = activeStep === 1 ? selectedGroup : undefined;
+    const previewGuests = previewGroup ? selectedGuests : [];
 
     if (!loaded) return error ? <Alert severity="error">{error}</Alert> : null;
 
@@ -149,11 +125,7 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
             }}
         >
             <Stack spacing={3} sx={{ minWidth: 0, overflowY: { md: 'auto' } }}>
-                <Box>
-                    <Button startIcon={<ArrowBack />} onClick={onBack}>
-                        Към събитието
-                    </Button>
-                </Box>
+                <BackButton onClick={onBack}>Към събитието</BackButton>
                 <Typography variant="h4">{slug ? 'Редактирай поканата' : 'Създай своята покана'}</Typography>
 
                 <Stepper nonLinear activeStep={activeStep}>
@@ -165,44 +137,29 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                 </Stepper>
 
                 {activeStep === 0 && (
-                    <MainInfo
-                        details={details}
-                        setDetails={setDetails}
-                        fields={fields}
-                        setFields={setFields}
-                    />
+                    <>
+                        <MainInfo
+                            details={details}
+                            setDetails={setDetails}
+                            fields={fields}
+                            setFields={setFields}
+                        />
+                        <GroupSelect
+                            groups={groups}
+                            guests={guests}
+                            selectedId={previewGroupId}
+                            onSelect={setPreviewGroupId}
+                        />
+                    </>
                 )}
 
                 {activeStep === 1 && (
-                    <Stack spacing={2}>
-                        <Stack
-                            component="form"
-                            direction="row"
-                            spacing={2}
-                            onSubmit={generate}
-                            sx={{ alignItems: 'flex-start' }}
-                        >
-                            <TextField
-                                label="Describe the image"
-                                value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                multiline
-                                maxRows={4}
-                                fullWidth
-                                disabled={generating}
-                            />
-                            <Button
-                                type="submit"
-                                variant="contained"
-                                disabled={generating || !prompt.trim()}
-                                startIcon={generating ? <CircularProgress size={18} color="inherit" /> : undefined}
-                                sx={{ flexShrink: 0, height: 56 }}
-                            >
-                                {generating ? 'Generating…' : 'Generate'}
-                            </Button>
-                        </Stack>
-                    </Stack>
+                    <GuestsPreview
+                        groups={groups}
+                        guests={guests}
+                        selectedId={previewGroupId}
+                        onSelect={setPreviewGroupId}
+                    />
                 )}
 
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
@@ -274,7 +231,13 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                         details={details}
                         imageUrl={imageUrl}
                         page={activeStep}
+                        guestNames={selectedGuests.map((guest) => guest.name)}
                         onPageChange={setActiveStep}
+                        responseForm={
+                            previewGroup && (
+                                <GroupRsvpForm fields={fields} guests={previewGuests} response={null} />
+                            )
+                        }
                     />
                 </Box>
             </Box>

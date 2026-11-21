@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Alert,
     Box,
@@ -7,20 +7,20 @@ import {
     CardActionArea,
     CardContent,
     Chip,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-    IconButton,
     Stack,
     TextField,
     Typography,
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
-import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
-import type { EventInfo } from '../../shared/types';
+import { MAX_NAME_LENGTH, type EventInfo } from '../../shared/types';
 import { api } from '../api';
+import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog';
+import DeleteIconButton from '../components/DeleteIconButton';
+import FormDialog from '../components/FormDialog';
+import MutedText from '../components/MutedText';
+import { errorMessage } from '../errors';
+import { useAsyncAction } from '../hooks/useAsyncAction';
+import { useConfirmDelete } from '../hooks/useConfirmDelete';
 
 interface EventListProps {
     onOpen: (eventId: number) => void;
@@ -32,43 +32,23 @@ export default function EventList({ onOpen }: EventListProps) {
     const [error, setError] = useState<string | null>(null);
     const [creatingOpen, setCreatingOpen] = useState(false);
     const [newName, setNewName] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [toDelete, setToDelete] = useState<EventInfo | null>(null);
+    const creating = useAsyncAction();
+    const deletion = useConfirmDelete(async (event: EventInfo) => {
+        await api.deleteEvent(event.id);
+        setEvents((current) => current?.filter((e) => e.id !== event.id) ?? null);
+    });
 
     useEffect(() => {
         api.listEvents()
             .then(setEvents)
-            .catch((e: Error) => setError(e.message));
+            .catch((e) => setError(errorMessage(e)));
     }, []);
 
-    const create = async (event: FormEvent) => {
-        event.preventDefault();
-        if (!newName.trim()) return;
-        setSaving(true);
-        setError(null);
-        try {
+    const create = () =>
+        void creating.run(async () => {
             const created = await api.createEvent(newName.trim());
             onOpen(created.id);
-        } catch (e) {
-            setError((e as Error).message);
-            setSaving(false);
-        }
-    };
-
-    const confirmDelete = async () => {
-        if (!toDelete) return;
-        setSaving(true);
-        setError(null);
-        try {
-            await api.deleteEvent(toDelete.id);
-            setEvents((current) => current?.filter((e) => e.id !== toDelete.id) ?? null);
-            setToDelete(null);
-        } catch (e) {
-            setError((e as Error).message);
-        } finally {
-            setSaving(false);
-        }
-    };
+        });
 
     return (
         <Stack spacing={3}>
@@ -91,9 +71,7 @@ export default function EventList({ onOpen }: EventListProps) {
                                 <Typography variant="h5" gutterBottom>
                                     {event.name}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" gutterBottom>
-                                    Гости: {event.guestCount}
-                                </Typography>
+                                <MutedText gutterBottom>Гости: {event.guestCount}</MutedText>
                                 <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                                     <Chip
                                         size="small"
@@ -107,60 +85,43 @@ export default function EventList({ onOpen }: EventListProps) {
                             </CardContent>
                         </CardActionArea>
                         {event.isOwner && (
-                            <IconButton
+                            <DeleteIconButton
                                 aria-label={`Изтрий ${event.name}`}
-                                onClick={() => setToDelete(event)}
+                                onClick={() => deletion.ask(event)}
                                 sx={{ position: 'absolute', top: 8, right: 8 }}
-                            >
-                                <DeleteOutlined />
-                            </IconButton>
+                            />
                         )}
                     </Card>
                 ))}
             </Box>
 
-            <Dialog
+            <FormDialog
+                title="Ново събитие"
                 open={creatingOpen}
-                onClose={() => setCreatingOpen(false)}
-                slotProps={{ paper: { component: 'form', onSubmit: create } }}
+                onCancel={() => setCreatingOpen(false)}
+                onSubmit={create}
+                canSubmit={Boolean(newName.trim())}
+                saving={creating.pending}
+                error={creating.error}
+                submitLabel="Създай"
             >
-                <DialogTitle>Ново събитие</DialogTitle>
-                <DialogContent>
-                    <TextField
-                        autoFocus
-                        required
-                        label="Име на събитието"
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        slotProps={{ htmlInput: { maxLength: 100 } }}
-                        fullWidth
-                        margin="dense"
-                        disabled={saving}
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setCreatingOpen(false)}>Отказ</Button>
-                    <Button type="submit" variant="contained" disabled={saving || !newName.trim()}>
-                        Създай
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                <TextField
+                    autoFocus
+                    required
+                    label="Име на събитието"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    slotProps={{ htmlInput: { maxLength: MAX_NAME_LENGTH } }}
+                    fullWidth
+                    margin="dense"
+                    disabled={creating.pending}
+                />
+            </FormDialog>
 
-            <Dialog open={toDelete !== null} onClose={() => setToDelete(null)}>
-                <DialogTitle>Изтриване на събитие</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Сигурни ли сте, че искате да изтриете „{toDelete?.name}“? Списъкът с гости, поканата и
-                        отговорите към нея ще бъдат изтрити.
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setToDelete(null)}>Отказ</Button>
-                    <Button color="error" variant="contained" onClick={confirmDelete} disabled={saving}>
-                        Изтрий
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <ConfirmDeleteDialog title="Изтриване на събитие" deletion={deletion}>
+                Сигурни ли сте, че искате да изтриете „{deletion.target?.name}“? Списъкът с гости, поканата и
+                отговорите към нея ще бъдат изтрити.
+            </ConfirmDeleteDialog>
         </Stack>
     );
 }

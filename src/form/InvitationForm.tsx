@@ -1,7 +1,10 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Box, IconButton, Paper, Stack, Typography } from '@mui/material';
+import { Box, IconButton, Stack, Typography } from '@mui/material';
 import KeyboardArrowDown from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUp from '@mui/icons-material/KeyboardArrowUp';
 import type { InvitationDetails, FormFields, FormResponseInput } from '../../shared/types';
+import { isoToLongDate } from '../dates';
+import { joinGuestNames } from './guestNames';
 import RsvpForm from './RsvpForm';
 
 interface Props {
@@ -16,16 +19,88 @@ interface Props {
     page?: number;
     /** Called when the reader moves to another page by arrow or scrolling. */
     onPageChange?: (page: number) => void;
+    /** Names of the guests the invitation is addressed to; omit (or leave empty) to greet the guests in general. */
+    guestNames?: string[];
 }
 
 interface PageProps {
     children: ReactNode;
     imageUrl?: string | null;
-    /** Shows the arrow that moves to the next page. */
+    /** Shows the arrow at the bottom that moves to the next page. */
     onNext?: () => void;
+    /** Shows the arrow at the top that moves back to the previous page. */
+    onPrev?: () => void;
 }
 
-function InvitationPage({ children, imageUrl, onNext }: PageProps) {
+/** Gold arrow on a light disc, so it stands out on top of a photo too. */
+const arrowSx = {
+    position: 'absolute',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    color: 'primary.main',
+    bgcolor: 'rgba(255, 255, 255, 0.85)',
+    '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.95)', color: 'primary.dark' },
+} as const;
+
+/** Radius of the plaque's inward-arched corners, and the width of its gold edge. */
+const CORNER_RADIUS = 28;
+const EDGE = 2;
+
+/**
+ * Mask that cuts a quarter circle out of each corner, centred on the corner itself.
+ * `offset` moves the circles' centres outwards, so an inner layer inset by `offset` keeps an even edge.
+ */
+const concaveCornersMask = (radius: number, offset = 0) => {
+    const corner = (x: string, y: string, position: string) =>
+        `radial-gradient(circle at ${x} ${y}, transparent ${radius}px, #000 ${radius + 0.5}px) ${position} / 51% 51% no-repeat`;
+    const near = `${-offset}px`;
+    const far = `calc(100% + ${offset}px)`;
+    return [
+        corner(near, near, 'top left'),
+        corner(far, near, 'top right'),
+        corner(near, far, 'bottom left'),
+        corner(far, far, 'bottom right'),
+    ].join(', ');
+};
+
+/** Tall gold-edged plaque with corners arched inwards; a white layer inset by the edge shows the gold as a border. */
+const plaqueSx = {
+    position: 'relative',
+    // Taller than its content, but not the whole page; long text scrolls inside.
+    flex: '0 1 auto',
+    minHeight: '85%',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    px: 3,
+    py: 5,
+    overflowY: 'auto',
+    scrollbarWidth: 'none',
+    bgcolor: 'primary.main',
+    mask: concaveCornersMask(CORNER_RADIUS),
+    '&::before': {
+        content: '""',
+        position: 'absolute',
+        inset: EDGE,
+        bgcolor: 'rgba(255, 255, 255, 0.95)',
+        mask: concaveCornersMask(CORNER_RADIUS + EDGE, EDGE),
+    },
+    // Content sits above the white layer.
+    '& > *': { position: 'relative' },
+    // The answer forms are cards of their own; inside the plaque they blend in.
+    '& .MuiPaper-root': { p: 0, bgcolor: 'transparent', boxShadow: 'none', border: 0 },
+} as const;
+
+/** A line of the cover page's text, under the greeting. */
+function Subtitle({ children }: { children: ReactNode }) {
+    return (
+        <Typography variant="subtitle1" align="center" color="text.secondary">
+            {children}
+        </Typography>
+    );
+}
+
+function InvitationPage({ children, imageUrl, onNext, onPrev }: PageProps) {
     return (
         <Box
             sx={{
@@ -35,29 +110,27 @@ function InvitationPage({ children, imageUrl, onNext }: PageProps) {
                 scrollSnapAlign: 'start',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: imageUrl ? 'flex-end' : 'center',
-                p: 2,
-                pb: onNext ? 7 : 2,
+                justifyContent: 'center',
+                // The same padding on every page, leaving room for both arrows, so the plaque never moves.
+                px: 2,
+                pt: 10,
+                pb: 7,
                 bgcolor: 'background.default',
                 backgroundImage: imageUrl ? `url(${imageUrl})` : 'none',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
             }}
         >
-            {children}
+            {onPrev && (
+                // Set below the top edge so the builder's phone notch doesn't cover it.
+                <IconButton aria-label="Към предишната страница" onClick={onPrev} sx={{ ...arrowSx, top: 36 }}>
+                    <KeyboardArrowUp />
+                </IconButton>
+            )}
+            {/* Every page shows its content on the same plaque. */}
+            <Box sx={plaqueSx}>{children}</Box>
             {onNext && (
-                <IconButton
-                    aria-label="Към следващата страница"
-                    onClick={onNext}
-                    sx={{
-                        position: 'absolute',
-                        bottom: 8,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        bgcolor: 'rgba(255, 255, 255, 0.8)',
-                        '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.95)' },
-                    }}
-                >
+                <IconButton aria-label="Към следващата страница" onClick={onNext} sx={{ ...arrowSx, bottom: 8 }}>
                     <KeyboardArrowDown />
                 </IconButton>
             )}
@@ -65,13 +138,27 @@ function InvitationPage({ children, imageUrl, onNext }: PageProps) {
     );
 }
 
-export default function InvitationForm({ fields, details, imageUrl, onSubmit, responseForm, page, onPageChange }: Props) {
-    const coupleTitle = [details.brideName, details.groomName].map((n) => n.trim()).filter(Boolean).join(' & ');
-    const [year, month, day] = details.weddingDate.split('-').map(Number);
-    // Built from parts so the date is local and doesn't shift a day in timezones west of UTC.
-    const weddingDate = details.weddingDate
-        ? new Date(year, month - 1, day).toLocaleDateString('BG', { day: 'numeric', month: 'long', year: 'numeric' })
-        : '';
+export default function InvitationForm({
+    fields,
+    details,
+    imageUrl,
+    onSubmit,
+    responseForm,
+    page,
+    onPageChange,
+    guestNames = [],
+}: Props) {
+    const coupleTitle = [details.brideName, details.groomName]
+        .map((n) => n.trim())
+        .filter(Boolean)
+        .join(' & ');
+    const weddingDate = isoToLongDate(details.weddingDate);
+    const place = details.place.trim();
+    // Guests are greeted by their first name only: "Иван Иванов" → "Иван".
+    const names = guestNames.map((n) => n.trim().split(/\s+/)[0]).filter(Boolean);
+    const addressee = names.length > 0 ? joinGuestNames(names) : 'гости';
+    // A single guest is addressed informally in the singular ("те"), a group in the plural ("ви").
+    const invite = `имаме удоволствието да ${names.length === 1 ? 'те' : 'ви'} поканим на`;
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const scrollToPage = (target: number) => {
@@ -106,28 +193,30 @@ export default function InvitationForm({ fields, details, imageUrl, onSubmit, re
             }}
         >
             <InvitationPage onNext={() => goToPage(1)}>
-                <Paper sx={{ p: 2.5, bgcolor: 'rgba(255, 255, 255, 0.92)' }}>
-                    <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
-                        <Typography variant="h5" align="center" color="primary.dark">
-                            {coupleTitle}
-                        </Typography>
-                        <Typography variant="subtitle1" align="center" color="text.secondary">ви канят на</Typography>
-                        <Typography variant="metallic" component="h2" align="center">
-                            Сватба
-                        </Typography>
-                        <Typography variant="subtitle1" align="center" color="text.secondary">на</Typography>
-                        <Typography variant="subtitle1" align="center" color="text.secondary">
-                            {weddingDate}
-                        </Typography>
-                        <Typography variant="subtitle1" align="center" color="text.secondary">в</Typography>
-                        <Typography variant="subtitle1" align="center" color="text.secondary">
-                            {details.place}
-                        </Typography>
-                    </Stack>
-                </Paper>
+                <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Typography>
+                            Скъпи
+                    </Typography>
+                    <Typography variant="h6" component="p" align="center" color="primary.dark">
+                        {addressee}
+                    </Typography>
+                    <Subtitle>{invite}</Subtitle>
+                    <Typography variant="metallic" component="h2" align="center">
+                        Сватба
+                    </Typography>
+                    <Subtitle>на</Subtitle>
+                    <Subtitle>{weddingDate}</Subtitle>
+                    <Subtitle>в</Subtitle>
+                    <Subtitle>{place}</Subtitle>
+                    <Subtitle>Нека заедно отбележим празника!</Subtitle>
+                    {/* The couple's names in gold, smaller than the "Сватба" heading. */}
+                    <Typography variant="metallic" component="h5" align="center" sx={{ fontSize: '1rem' }}>
+                        {coupleTitle}
+                    </Typography>
+                </Stack>
             </InvitationPage>
 
-            <InvitationPage imageUrl={imageUrl}>
+            <InvitationPage imageUrl={imageUrl} onPrev={() => goToPage(0)}>
                 {responseForm ?? <RsvpForm fields={fields} onSubmit={onSubmit} />}
             </InvitationPage>
         </Box>

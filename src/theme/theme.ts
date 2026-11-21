@@ -1,6 +1,7 @@
 ﻿import { alpha, createTheme } from '@mui/material/styles';
 import type { CSSProperties } from 'react';
 import { palette } from './palette';
+import { defaultTypography, fontFamily } from './typography';
 
 export const scriptFont = "'Civil Manuscript', 'Cormorant Garamond', Georgia, serif";
 
@@ -25,16 +26,16 @@ export const theme = createTheme({
   shape: { borderRadius: 10 },
   typography: {
     fontFamily: "'Lato', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-    h1: { fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 600 },
-    h2: { fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 600 },
-    h3: { fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 600 },
-    h4: { fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 600, letterSpacing: '0.02em' },
-    h5: { fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 600 },
-    h6: { fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 600 },
+    h1: defaultTypography,
+    h2: defaultTypography,
+    h3: defaultTypography,
+    h4: { ...defaultTypography, letterSpacing: '0.02em' },
+    h5: defaultTypography,
+    h6: defaultTypography,
     button: { textTransform: 'none', fontWeight: 600, letterSpacing: '0.03em' },
     // Gold leaf: banded gradient clipped to the glyphs, with a soft drop shadow for depth.
     metallic: {
-      fontFamily: "'Cormorant Garamond', Georgia, serif",
+      fontFamily: fontFamily,
       fontWeight: 700,
       fontSize: '2.25rem',
       lineHeight: 1.2,
@@ -65,11 +66,16 @@ export const theme = createTheme({
           variants: [
             {
               props: { variant: 'contained', color: 'primary' },
+              // Deep gold so the white text stands out; the light gold alone is too pale behind it.
               style: {
-                backgroundImage: `linear-gradient(135deg, ${palette.primary.light} 0%, ${palette.primary.main} 50%, ${palette.primary.dark} 100%)`,
+                color: palette.primary.contrastText,
+                textShadow: `0 1px 1px ${alpha(palette.ink.dark, 0.45)}`,
+                backgroundImage: `linear-gradient(135deg, ${palette.primary.main} 0%, ${palette.primary.dark} 55%, ${palette.primary.dark} 100%)`,
                 '&:hover': {
-                  backgroundImage: `linear-gradient(135deg, ${palette.primary.main} 0%, ${palette.primary.dark} 100%)`,
+                  backgroundImage: `linear-gradient(135deg, ${palette.primary.dark} 0%, ${palette.primary.dark} 100%)`,
                 },
+                // A disabled button drops the gold, so its grey text isn't lost on it.
+                '&.Mui-disabled': { backgroundImage: 'none', textShadow: 'none' },
               },
             },
           ],

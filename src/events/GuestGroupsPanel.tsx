@@ -1,29 +1,18 @@
 import { useState } from 'react';
-import {
-    Alert,
-    Box,
-    Button,
-    Chip,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-    IconButton,
-    Paper,
-    Stack,
-    Typography,
-} from '@mui/material';
+import { Alert, Box, Button, Chip } from '@mui/material';
 import Add from '@mui/icons-material/Add';
-import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
-import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
-import Edit from '@mui/icons-material/Edit';
-import HighlightOff from '@mui/icons-material/HighlightOff';
 import type { Guest, GuestGroup, GuestGroupInput } from '../../shared/types';
 import { api } from '../api';
+import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog';
+import ItemCard from '../components/ItemCard';
+import MutedText from '../components/MutedText';
+import Panel from '../components/Panel';
+import ShareLinkField from '../components/ShareLinkField';
+import AnswerIcon from '../form/AnswerIcon';
 import { answerLabel } from '../form/answers';
-import ShareLinkField from '../form/ShareLinkField';
 import { groupShareUrlFor } from '../form/shareUrl';
+import { useConfirmDelete } from '../hooks/useConfirmDelete';
+import { sortByName } from '../sortByName';
 import GroupDialog from './GroupDialog';
 
 interface GuestGroupsPanelProps {
@@ -39,11 +28,10 @@ interface GuestGroupsPanelProps {
 export default function GuestGroupsPanel({ eventId, guests, groups, onGroupsChange, hasInvitation }: GuestGroupsPanelProps) {
     // The group being edited in the dialog: 'new' to create one, null when the dialog is closed.
     const [editing, setEditing] = useState<GuestGroup | 'new' | null>(null);
-    const [toDelete, setToDelete] = useState<GuestGroup | null>(null);
-    const [deleting, setDeleting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const sortByName = (list: GuestGroup[]) => [...list].sort((a, b) => a.name.localeCompare(b.name, 'bg'));
+    const deletion = useConfirmDelete(async (group: GuestGroup) => {
+        await api.deleteGroup(eventId, group.id);
+        onGroupsChange(groups.filter((g) => g.id !== group.id));
+    });
 
     /** Saving moves the chosen guests out of any other group, so those groups are updated here too. */
     const save = async (input: GuestGroupInput) => {
@@ -58,107 +46,70 @@ export default function GuestGroupsPanel({ eventId, guests, groups, onGroupsChan
         setEditing(null);
     };
 
-    const remove = async () => {
-        if (!toDelete) return;
-        setDeleting(true);
-        setError(null);
-        try {
-            await api.deleteGroup(eventId, toDelete.id);
-            onGroupsChange(groups.filter((g) => g.id !== toDelete.id));
-            setToDelete(null);
-        } catch (e) {
-            setError((e as Error).message);
-        } finally {
-            setDeleting(false);
-        }
-    };
-
     const guestName = (id: number) => guests.find((g) => g.id === id)?.name;
 
     return (
-        <Paper variant="outlined" sx={{ p: 3 }}>
-            <Stack spacing={2}>
-                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="h5">Групи ({groups.length})</Typography>
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={() => setEditing('new')}
-                        disabled={guests.length === 0}
-                    >
-                        Нова група
-                    </Button>
-                </Stack>
-                <Typography variant="body2" color="text.secondary">
-                    Всяка група получава собствена връзка към поканата с попълнени имена. След като гостите отговорят,
-                    същата връзка показва отговора им.
-                </Typography>
-                {!hasInvitation && groups.length > 0 && (
-                    <Alert severity="info">Връзките ще заработят, след като създадете покана за събитието.</Alert>
-                )}
-                {error && <Alert severity="error">{error}</Alert>}
-                {groups.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                        {guests.length === 0 ? 'Добавете гости, за да създадете група.' : 'Все още няма групи.'}
-                    </Typography>
-                ) : (
-                    groups.map((group) => {
-                        const answers = new Map(group.response?.guests.map((g) => [g.guestId, g.answer]));
-                        return (
-                            <Paper
-                                key={group.id}
-                                variant="outlined"
-                                component="section"
-                                aria-label={group.name}
-                                sx={{ p: 2 }}
-                            >
-                                <Stack spacing={1.5}>
-                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                        <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                                            {group.name}
-                                        </Typography>
+        <Panel
+            title={`Групи (${groups.length})`}
+            action={
+                <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => setEditing('new')}
+                    disabled={guests.length === 0}
+                >
+                    Нова група
+                </Button>
+            }
+            description="Всяка група получава собствена връзка към поканата с попълнени имена. След като гостите отговорят, същата връзка показва отговора им."
+        >
+            {!hasInvitation && groups.length > 0 && (
+                <Alert severity="info">Връзките ще заработят, след като създадете покана за събитието.</Alert>
+            )}
+            {groups.length === 0 ? (
+                <MutedText>
+                    {guests.length === 0 ? 'Добавете гости, за да създадете група.' : 'Все още няма групи.'}
+                </MutedText>
+            ) : (
+                groups.map((group) => {
+                    const answers = new Map(group.response?.guests.map((g) => [g.guestId, g.answer]));
+                    return (
+                        <ItemCard
+                            key={group.id}
+                            name={group.name}
+                            badge={
+                                <Chip
+                                    size="small"
+                                    color={group.response ? 'success' : 'default'}
+                                    label={group.response ? 'Отговорили' : 'Очаква отговор'}
+                                />
+                            }
+                            onEdit={() => setEditing(group)}
+                            onDelete={() => deletion.ask(group)}
+                        >
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                {group.guestIds.map((id) => {
+                                    const name = guestName(id);
+                                    if (!name) return null;
+                                    const answer = answers.get(id);
+                                    const answered = typeof answer === 'boolean';
+                                    return (
                                         <Chip
+                                            key={id}
                                             size="small"
-                                            color={group.response ? 'success' : 'default'}
-                                            label={group.response ? 'Отговорили' : 'Очаква отговор'}
+                                            variant="outlined"
+                                            icon={answered ? <AnswerIcon answer={answer} /> : undefined}
+                                            label={name}
+                                            title={answered ? answerLabel(answer) : undefined}
                                         />
-                                        <IconButton aria-label={`Редактирай ${group.name}`} onClick={() => setEditing(group)}>
-                                            <Edit />
-                                        </IconButton>
-                                        <IconButton aria-label={`Изтрий ${group.name}`} onClick={() => setToDelete(group)}>
-                                            <DeleteOutlined />
-                                        </IconButton>
-                                    </Stack>
-                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                        {group.guestIds.map((id) => {
-                                            const name = guestName(id);
-                                            if (!name) return null;
-                                            const answer = answers.get(id);
-                                            return (
-                                                <Chip
-                                                    key={id}
-                                                    size="small"
-                                                    variant="outlined"
-                                                    icon={
-                                                        answer === true ? (
-                                                            <CheckCircleOutlined color="success" />
-                                                        ) : answer === false ? (
-                                                            <HighlightOff color="error" />
-                                                        ) : undefined
-                                                    }
-                                                    label={name}
-                                                    title={typeof answer === 'boolean' ? answerLabel(answer) : undefined}
-                                                />
-                                            );
-                                        })}
-                                    </Box>
-                                    <ShareLinkField url={groupShareUrlFor(group.token)} label="Връзка за групата" />
-                                </Stack>
-                            </Paper>
-                        );
-                    })
-                )}
-            </Stack>
+                                    );
+                                })}
+                            </Box>
+                            <ShareLinkField url={groupShareUrlFor(group.token)} label="Връзка за групата" />
+                        </ItemCard>
+                    );
+                })
+            )}
 
             {editing !== null && (
                 <GroupDialog
@@ -171,21 +122,10 @@ export default function GuestGroupsPanel({ eventId, guests, groups, onGroupsChan
                 />
             )}
 
-            <Dialog open={toDelete !== null} onClose={() => setToDelete(null)}>
-                <DialogTitle>Изтриване на група</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Сигурни ли сте, че искате да изтриете „{toDelete?.name}“? Връзката на групата ще спре да
-                        работи и отговорът ѝ ще бъде изтрит. Гостите остават в списъка.
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setToDelete(null)}>Отказ</Button>
-                    <Button color="error" variant="contained" onClick={remove} disabled={deleting}>
-                        Изтрий
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </Paper>
+            <ConfirmDeleteDialog title="Изтриване на група" deletion={deletion}>
+                Сигурни ли сте, че искате да изтриете „{deletion.target?.name}“? Връзката на групата ще спре да работи и
+                отговорът ѝ ще бъде изтрит. Гостите остават в списъка.
+            </ConfirmDeleteDialog>
+        </Panel>
     );
 }

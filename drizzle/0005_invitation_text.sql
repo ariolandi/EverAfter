@@ -1,0 +1,1 @@
+ALTER TABLE "forms" ADD COLUMN "invitation_text" text DEFAULT '' NOT NULL;

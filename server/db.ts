@@ -70,6 +70,7 @@ const toForm = (row: typeof forms.$inferSelect): PublishedForm => ({
   weddingDate: row.weddingDate,
   place: row.place,
   colors: row.colors,
+  invitationText: row.invitationText,
   imageUrl: row.imageId === null ? null : `/api/forms/${row.slug}/image`,
 });
 

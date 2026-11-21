@@ -1,7 +1,15 @@
 import crypto from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { HttpStatus } from '../shared/httpStatus.js';
-import type { MenuCourses, MenuInput } from '../shared/types.js';
+import {
+  MAX_DISH_LENGTH,
+  MAX_EMAIL_LENGTH,
+  MAX_GROUP_SIZE,
+  MAX_NAME_LENGTH,
+  MENU_COURSE_KEYS,
+  type MenuCourses,
+  type MenuInput,
+} from '../shared/types.js';
 import { requireUser } from './auth.js';
 import {
   addCoowner,
@@ -26,13 +34,6 @@ import {
   updateGroup,
   updateMenu,
 } from './db.js';
-
-const MAX_GROUP_SIZE = 50;
-
-const MAX_NAME_LENGTH = 100;
-const MAX_EMAIL_LENGTH = 254;
-const MAX_DISH_LENGTH = 200;
-const MENU_COURSES = ['salad', 'appetizer', 'mainCourse'] as const;
 
 export const eventRouter = Router();
 
@@ -244,7 +245,7 @@ function parseMenuInput(req: Request, res: Response): MenuInput | undefined {
     return undefined;
   }
   const courses = {} as MenuCourses;
-  for (const course of MENU_COURSES) {
+  for (const course of MENU_COURSE_KEYS) {
     const dish = typeof req.body?.[course] === 'string' ? (req.body[course] as string).trim() : '';
     if (!dish || dish.length > MAX_DISH_LENGTH) {
       res.status(HttpStatus.BAD_REQUEST).json({ error: `${course} must be 1-${MAX_DISH_LENGTH} characters` });

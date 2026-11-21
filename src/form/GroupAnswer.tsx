@@ -1,7 +1,6 @@
 import { List, ListItem, ListItemIcon, ListItemText } from '@mui/material';
-import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
-import HighlightOff from '@mui/icons-material/HighlightOff';
 import PersonOutlined from '@mui/icons-material/PersonOutlined';
+import AnswerIcon from './AnswerIcon';
 import { answerLabel } from './answers';
 
 interface GroupAnswerProps {
@@ -17,10 +16,8 @@ export default function GroupAnswer({ guests }: GroupAnswerProps) {
                     <ListItemIcon sx={{ minWidth: 32 }}>
                         {guest.answer === null ? (
                             <PersonOutlined fontSize="small" />
-                        ) : guest.answer ? (
-                            <CheckCircleOutlined fontSize="small" color="success" />
                         ) : (
-                            <HighlightOff fontSize="small" color="error" />
+                            <AnswerIcon answer={guest.answer} fontSize="small" />
                         )}
                     </ListItemIcon>
                     <ListItemText

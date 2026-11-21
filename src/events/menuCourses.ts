@@ -1,8 +1,10 @@
-import type { MenuCourses } from '../../shared/types';
+import { MENU_COURSE_KEYS, type MenuCourses } from '../../shared/types';
+
+const LABELS: Record<keyof MenuCourses, string> = {
+    salad: 'Салата',
+    appetizer: 'Предястие',
+    mainCourse: 'Основно ястие',
+};
 
 /** The courses every menu has, in the order they are served. */
-export const MENU_COURSES: { key: keyof MenuCourses; label: string }[] = [
-    { key: 'salad', label: 'Салата' },
-    { key: 'appetizer', label: 'Предястие' },
-    { key: 'mainCourse', label: 'Основно ястие' },
-];
+export const MENU_COURSES = MENU_COURSE_KEYS.map((key) => ({ key, label: LABELS[key] }));

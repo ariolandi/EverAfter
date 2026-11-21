@@ -1,20 +1,14 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import {
-    Alert,
-    Button,
-    IconButton,
-    List,
-    ListItem,
-    ListItemText,
-    Paper,
-    Stack,
-    TextField,
-    Typography,
-} from '@mui/material';
-import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
+import { useEffect, useState } from 'react';
+import { Alert, List, ListItem, ListItemText } from '@mui/material';
 import PersonAdd from '@mui/icons-material/PersonAdd';
-import type { Coowner, EventInfo } from '../../shared/types';
+import { MAX_EMAIL_LENGTH, type Coowner, type EventInfo } from '../../shared/types';
 import { api } from '../api';
+import DeleteIconButton from '../components/DeleteIconButton';
+import InlineAddForm from '../components/InlineAddForm';
+import MutedText from '../components/MutedText';
+import Panel from '../components/Panel';
+import { errorMessage } from '../errors';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 
 interface CoownersPanelProps {
     event: EventInfo;
@@ -24,110 +18,77 @@ interface CoownersPanelProps {
 export default function CoownersPanel({ event }: CoownersPanelProps) {
     const [coowners, setCoowners] = useState<Coowner[]>([]);
     const [email, setEmail] = useState('');
-    const [inviting, setInviting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { pending: inviting, error, setError, run } = useAsyncAction();
 
     useEffect(() => {
         api.listCoowners(event.id)
             .then(setCoowners)
-            .catch((e: Error) => setError(e.message));
-    }, [event.id]);
+            .catch((e) => setError(errorMessage(e)));
+    }, [event.id, setError]);
 
-    const invite = async (e: FormEvent) => {
-        e.preventDefault();
-        if (!email.trim() || inviting) return;
-        setInviting(true);
-        setError(null);
-        try {
-            const coowner = await api.addCoowner(event.id, email.trim());
+    const invite = (address: string) =>
+        void run(async () => {
+            const coowner = await api.addCoowner(event.id, address);
             setCoowners((current) => [...current, coowner]);
             setEmail('');
-        } catch (err) {
-            setError((err as Error).message);
-        } finally {
-            setInviting(false);
-        }
-    };
+        });
 
-    const remove = async (coowner: Coowner) => {
-        setError(null);
-        try {
+    const remove = (coowner: Coowner) =>
+        void run(async () => {
             await api.deleteCoowner(event.id, coowner.id);
             setCoowners((current) => current.filter((c) => c.id !== coowner.id));
-        } catch (err) {
-            setError((err as Error).message);
-        }
-    };
+        });
 
     return (
-        <Paper variant="outlined" sx={{ p: 3 }}>
-            <Stack spacing={2}>
-                <Typography variant="h5">Съорганизатори</Typography>
-                {event.isOwner ? (
-                    <>
-                        <Typography variant="body2" color="text.secondary">
-                            Поканете някого да управлява събитието заедно с вас. То ще се появи в профила на човека,
-                            след като влезе с Google акаунта на този имейл.
-                        </Typography>
-                        <Stack component="form" direction="row" spacing={1} onSubmit={invite}>
-                            <TextField
-                                type="email"
-                                label="Имейл"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                slotProps={{ htmlInput: { maxLength: 254 } }}
-                                size="small"
-                                fullWidth
-                                disabled={inviting}
+        <Panel title="Съорганизатори">
+            {event.isOwner ? (
+                <>
+                    <MutedText>
+                        Поканете някого да управлява събитието заедно с вас. То ще се появи в профила на човека, след
+                        като влезе с Google акаунта на този имейл.
+                    </MutedText>
+                    <InlineAddForm
+                        type="email"
+                        label="Имейл"
+                        value={email}
+                        onChange={setEmail}
+                        onSubmit={invite}
+                        busy={inviting}
+                        maxLength={MAX_EMAIL_LENGTH}
+                        buttonLabel="Покани"
+                        buttonIcon={<PersonAdd />}
+                    />
+                </>
+            ) : (
+                <MutedText>Организатор: {event.ownerName}</MutedText>
+            )}
+            {error && <Alert severity="error">{error}</Alert>}
+            {coowners.length === 0 ? (
+                <MutedText>Все още няма поканени съорганизатори.</MutedText>
+            ) : (
+                <List dense>
+                    {coowners.map((coowner) => (
+                        <ListItem
+                            key={coowner.id}
+                            divider
+                            secondaryAction={
+                                event.isOwner && (
+                                    <DeleteIconButton
+                                        edge="end"
+                                        aria-label={`Премахни ${coowner.email}`}
+                                        onClick={() => remove(coowner)}
+                                    />
+                                )
+                            }
+                        >
+                            <ListItemText
+                                primary={coowner.name ?? coowner.email}
+                                secondary={coowner.name ? coowner.email : 'Още не е влизал(а) в EverAfter'}
                             />
-                            <Button
-                                type="submit"
-                                variant="contained"
-                                startIcon={<PersonAdd />}
-                                disabled={inviting || !email.trim()}
-                                sx={{ flexShrink: 0 }}
-                            >
-                                Покани
-                            </Button>
-                        </Stack>
-                    </>
-                ) : (
-                    <Typography variant="body2" color="text.secondary">
-                        Организатор: {event.ownerName}
-                    </Typography>
-                )}
-                {error && <Alert severity="error">{error}</Alert>}
-                {coowners.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                        Все още няма поканени съорганизатори.
-                    </Typography>
-                ) : (
-                    <List dense>
-                        {coowners.map((coowner) => (
-                            <ListItem
-                                key={coowner.id}
-                                divider
-                                secondaryAction={
-                                    event.isOwner && (
-                                        <IconButton
-                                            edge="end"
-                                            aria-label={`Премахни ${coowner.email}`}
-                                            onClick={() => void remove(coowner)}
-                                        >
-                                            <DeleteOutlined />
-                                        </IconButton>
-                                    )
-                                }
-                            >
-                                <ListItemText
-                                    primary={coowner.name ?? coowner.email}
-                                    secondary={coowner.name ? coowner.email : 'Още не е влизал(а) в EverAfter'}
-                                />
-                            </ListItem>
-                        ))}
-                    </List>
-                )}
-            </Stack>
-        </Paper>
+                        </ListItem>
+                    ))}
+                </List>
+            )}
+        </Panel>
     );
 }

@@ -34,7 +34,23 @@ export interface InvitationDetails {
   place: string;
   /** Theme colours as #rrggbb hex strings. */
   colors: string[];
+  /** Free text of the invitation, shown on its first page; '' when not set. */
+  invitationText: string;
 }
+
+export const MAX_INVITATION_TEXT_LENGTH = 2000;
+
+/** Longest name of a person, event, group or menu. */
+export const MAX_NAME_LENGTH = 100;
+
+export const MAX_PLACE_LENGTH = 200;
+
+export const MAX_DISH_LENGTH = 200;
+
+/** The longest valid email address (RFC 5321). */
+export const MAX_EMAIL_LENGTH = 254;
+
+export const MAX_GROUP_SIZE = 50;
 
 export const MAX_COLORS = 10;
 
@@ -87,6 +103,9 @@ export interface MenuCourses {
   appetizer: string;
   mainCourse: string;
 }
+
+/** The courses every menu has, in the order they are served. */
+export const MENU_COURSE_KEYS = ['salad', 'appetizer', 'mainCourse'] as const satisfies readonly (keyof MenuCourses)[];
 
 export interface MenuInput extends MenuCourses {
   name: string;

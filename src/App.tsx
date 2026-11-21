@@ -1,21 +1,32 @@
 import { useEffect, useState } from 'react';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
-import { Alert, AppBar, Avatar, Box, Button, Container, Paper, Stack, Toolbar, Typography, useTheme } from '@mui/material';
+import {
+  Alert,
+  AppBar,
+  Avatar,
+  Box,
+  Button,
+  Container,
+  Paper,
+  Stack,
+  Toolbar,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import type { User } from '../shared/types';
 import { api } from './api';
+import { errorMessage } from './errors';
 import Builder from './builder/Builder';
 import EventList from './events/EventList';
 import EventPage from './events/EventPage';
-
-/** Which screen is shown: the event list (null), an event, or that event's invitation builder. */
-type View = { eventId: number; building: boolean } | null;
+import { useRoute } from './route';
 
 export default function App() {
   const [clientId, setClientId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<View>(null);
+  const [view, setView] = useRoute();
   const { palette } = useTheme();
 
   useEffect(() => {
@@ -24,7 +35,7 @@ export default function App() {
         setClientId(config.googleClientId);
         setUser(me);
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e) => setError(errorMessage(e)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -37,7 +48,7 @@ export default function App() {
       setUser(await api.loginWithGoogle(credential));
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     }
   }
 
@@ -53,13 +64,20 @@ export default function App() {
     <>
       <AppBar position="static">
         <Toolbar>
-          <Typography variant="h4" component="h1" color="primary.dark" sx={{ flexGrow: 1 }}>
-            EverAfter
-          </Typography>
+          <Box sx={{ flexGrow: 1 }}>
+            <Typography variant="metallic" component="h1">
+              EverAfter
+            </Typography>
+          </Box>
           {user && (
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
               {user.picture && (
-                <Avatar src={user.picture} alt="" slotProps={{ img: { referrerPolicy: 'no-referrer' } }} sx={{ width: 32, height: 32 }} />
+                <Avatar
+                  src={user.picture}
+                  alt=""
+                  slotProps={{ img: { referrerPolicy: 'no-referrer' } }}
+                  sx={{ width: 32, height: 32 }}
+                />
               )}
               <Typography>{user.name}</Typography>
               <Button variant="outlined" size="small" onClick={logout}>
@@ -78,26 +96,32 @@ export default function App() {
         )}
 
         {user ? (
-          <Box sx={{
-            backgroundColor: 'background.paper',
-            height: '80vh',
-            overflow: 'auto',
-            padding: 8,
-            border: `2px solid ${palette.primary.main}`,
-            outline: `2px solid ${palette.primary.main}`,
-            outlineOffset: '-8px',
-          }}>
-            {view === null ? (
-              <EventList onOpen={(eventId) => setView({ eventId, building: false })} />
-            ) : view.building ? (
-              <Builder eventId={view.eventId} onBack={() => setView({ eventId: view.eventId, building: false })} />
-            ) : (
-              <EventPage
-                eventId={view.eventId}
-                onBack={() => setView(null)}
-                onEditInvitation={() => setView({ eventId: view.eventId, building: true })}
-              />
-            )}
+          // Double gold frame; the content scrolls in an inner box set in from the inner line,
+          // so it never runs up against or under the frame.
+          <Box
+            sx={{
+              backgroundColor: 'background.paper',
+              height: '80vh',
+              padding: 3,
+              border: `2px solid ${palette.primary.main}`,
+              outline: `2px solid ${palette.primary.main}`,
+              outlineOffset: '-10px',
+              margin: 1,
+            }}
+          >
+            <Box sx={{ height: '100%', overflow: 'auto', px: { xs: 2, md: 5 }, py: { xs: 2, md: 4 } }}>
+              {view === null ? (
+                <EventList onOpen={(eventId) => setView({ eventId, building: false })} />
+              ) : view.building ? (
+                <Builder eventId={view.eventId} onBack={() => setView({ eventId: view.eventId, building: false })} />
+              ) : (
+                <EventPage
+                  eventId={view.eventId}
+                  onBack={() => setView(null)}
+                  onEditInvitation={() => setView({ eventId: view.eventId, building: true })}
+                />
+              )}
+            </Box>
           </Box>
         ) : clientId ? (
           <GoogleOAuthProvider clientId={clientId}>

@@ -19,6 +19,7 @@ const form: PublishedForm = {
   weddingDate: '2027-06-12',
   place: 'Пловдив',
   colors: ['#ffffff'],
+  invitationText: '',
 };
 
 const record = (overrides: Partial<GroupInvitationRecord> = {}): GroupInvitationRecord => ({

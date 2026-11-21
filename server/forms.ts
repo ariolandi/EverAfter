@@ -1,7 +1,14 @@
 import crypto from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { HttpStatus } from '../shared/httpStatus.js';
-import { MAX_COLORS, type FormFields, type InvitationDetails } from '../shared/types.js';
+import {
+  MAX_COLORS,
+  MAX_INVITATION_TEXT_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_PLACE_LENGTH,
+  type FormFields,
+  type InvitationDetails,
+} from '../shared/types.js';
 import { requireUser } from './auth.js';
 import {
   createForm,
@@ -13,9 +20,6 @@ import {
   getImageFile,
   updateForm,
 } from './db.js';
-
-const MAX_NAME_LENGTH = 100;
-const MAX_PLACE_LENGTH = 200;
 
 export const formRouter = Router();
 
@@ -66,6 +70,13 @@ async function parseFormInput<P>(
     res.status(HttpStatus.BAD_REQUEST).json({ error: `colors must be 1-${MAX_COLORS} #rrggbb values` });
     return;
   }
+  const invitationText = typeof req.body?.invitationText === 'string' ? req.body.invitationText.trim() : '';
+  if (invitationText.length > MAX_INVITATION_TEXT_LENGTH) {
+    res
+      .status(HttpStatus.BAD_REQUEST)
+      .json({ error: `invitationText must be at most ${MAX_INVITATION_TEXT_LENGTH} characters` });
+    return;
+  }
   if (
     imageId !== null &&
     imageId !== currentImageId &&
@@ -77,7 +88,7 @@ async function parseFormInput<P>(
   return {
     imageId,
     fields: { showName, showAnswer },
-    details: { brideName, groomName, weddingDate, place, colors: colors as string[] },
+    details: { brideName, groomName, weddingDate, place, colors: colors as string[], invitationText },
   };
 }
 

@@ -1,6 +1,6 @@
-import { fireEvent, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import type { GeneratedImage } from '../../shared/types';
+import { screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Guest, GuestGroup } from '../../shared/types';
 import { api } from '../api';
 import { eventInfo, publishedForm } from '../test/fixtures';
 import { renderWithTheme } from '../test/render';
@@ -8,18 +8,32 @@ import Builder from './Builder';
 
 vi.mock('../api');
 
-const image = (id: number): GeneratedImage => ({
+const guest = (id: number, name: string): Guest => ({
     id,
-    prompt: 'цветя',
+    name,
+    groupId: null,
+    isChild: false,
     createdAt: '2026-11-01T10:00:00.000Z',
-    url: `/api/images/${id}/file`,
+});
+
+const group = (id: number, name: string, guestIds: number[]): GuestGroup => ({
+    id,
+    name,
+    token: `token-${id}`,
+    guestIds,
+    response: null,
+    createdAt: '2026-11-01T10:00:00.000Z',
 });
 
 describe('Builder', () => {
+    beforeEach(() => {
+        vi.mocked(api.listGuests).mockResolvedValue([]);
+        vi.mocked(api.listGroups).mockResolvedValue([]);
+    });
+
     it('publishes a new invitation once the details are filled in', async () => {
-        vi.mocked(api.listImages).mockResolvedValue([image(5), image(4)]);
         vi.mocked(api.getEvent).mockResolvedValue(eventInfo());
-        vi.mocked(api.publishForm).mockResolvedValue(publishedForm({ imageId: 5, imageUrl: '/api/forms/abc123/image' }));
+        vi.mocked(api.publishForm).mockResolvedValue(publishedForm());
         const { user } = renderWithTheme(<Builder eventId={1} onBack={vi.fn()} />);
 
         expect(await screen.findByRole('heading', { name: 'Създай своята покана' })).toBeInTheDocument();
@@ -28,23 +42,21 @@ describe('Builder', () => {
 
         await user.type(screen.getByLabelText(/Булка/), 'Мария');
         await user.type(screen.getByLabelText(/Младоженец/), 'Иван');
-        fireEvent.change(screen.getByLabelText(/Дата на сватбата/), { target: { value: '2027-06-12' } });
+        await user.type(screen.getByLabelText(/Дата на сватбата/), '12062027');
         await user.type(screen.getByLabelText(/Място/), 'Пловдив');
         await user.click(save);
 
-        // A new invitation defaults to the latest image.
         expect(api.publishForm).toHaveBeenCalledWith(
             1,
-            5,
+            null,
             { showName: true, showAnswer: true },
-            { brideName: 'Мария', groomName: 'Иван', weddingDate: '2027-06-12', place: 'Пловдив', colors: ['#ffffff'] },
+            { brideName: 'Мария', groomName: 'Иван', weddingDate: '2027-06-12', place: 'Пловдив', colors: ['#ffffff'], invitationText: '' },
         );
         expect(await screen.findByText('Поканата е запазена')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Редактирай поканата' })).toBeInTheDocument();
     });
 
     it('loads and updates an existing invitation', async () => {
-        vi.mocked(api.listImages).mockResolvedValue([]);
         vi.mocked(api.getEvent).mockResolvedValue(
             eventInfo({ invitation: publishedForm({ imageId: 99, imageUrl: '/api/forms/abc123/image' }) }),
         );
@@ -58,7 +70,7 @@ describe('Builder', () => {
         await user.type(place, 'София');
         await user.click(screen.getByRole('button', { name: 'Запази' }));
 
-        // The saved image is kept even though it isn't in this user's gallery (another owner picked it).
+        // The saved image is kept.
         expect(api.updateForm).toHaveBeenCalledWith(
             'abc123',
             99,
@@ -67,40 +79,70 @@ describe('Builder', () => {
         );
     });
 
-    it('saves and moves to the image step with Напред', async () => {
-        vi.mocked(api.listImages).mockResolvedValue([]);
+    it('saves and moves to the guests step with Напред', async () => {
         vi.mocked(api.getEvent).mockResolvedValue(eventInfo({ invitation: publishedForm() }));
         vi.mocked(api.updateForm).mockResolvedValue(publishedForm());
         const { user } = renderWithTheme(<Builder eventId={1} onBack={vi.fn()} />);
 
         await user.click(await screen.findByRole('button', { name: 'Напред' }));
         expect(api.updateForm).toHaveBeenCalled();
-        expect(await screen.findByLabelText('Describe the image')).toBeInTheDocument();
+        expect(await screen.findByText(/Все още няма групи гости/)).toBeInTheDocument();
     });
 
-    it('generates an image from a prompt', async () => {
-        vi.mocked(api.listImages).mockResolvedValue([]);
+    it('previews the invitation of the guest group picked on the guests step', async () => {
         vi.mocked(api.getEvent).mockResolvedValue(eventInfo({ invitation: publishedForm() }));
-        vi.mocked(api.generateImage).mockResolvedValue(image(7));
+        vi.mocked(api.listGuests).mockResolvedValue([
+            guest(1, 'Иван'),
+            guest(2, 'Мария'),
+            guest(3, 'Петър'),
+        ]);
+        vi.mocked(api.listGroups).mockResolvedValue([
+            group(10, 'Семейство Иванови', [1, 2]),
+            group(11, 'Приятели', [3]),
+        ]);
         const { user } = renderWithTheme(<Builder eventId={1} onBack={vi.fn()} />);
 
-        await user.click(await screen.findByRole('tab', { name: /Изображение/ }));
-        const prompt = screen.getByLabelText('Describe the image');
-        await user.type(prompt, 'рози{Enter}');
+        await user.click(await screen.findByRole('tab', { name: /Гости/ }));
+        expect(screen.queryByLabelText('Describe the image')).not.toBeInTheDocument();
+        // The first group is previewed: it is selected in the list and fills in the answer form.
+        expect(screen.getByRole('button', { name: /Иван и Мария/ })).toHaveClass('Mui-selected');
+        expect(screen.getByRole('group', { name: 'Отговор за Иван' })).toBeInTheDocument();
 
-        expect(api.generateImage).toHaveBeenCalledWith('рози');
-        await vi.waitFor(() => expect(prompt).toHaveValue(''));
+        await user.click(screen.getByRole('button', { name: /Петър/ }));
+        expect(screen.getByRole('group', { name: 'Отговор за Петър' })).toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: 'Отговор за Иван' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Изпрати' })).toBeDisabled();
+    });
+
+    it('picks the greeted group on the first step', async () => {
+        vi.mocked(api.getEvent).mockResolvedValue(eventInfo({ invitation: publishedForm() }));
+        vi.mocked(api.listGuests).mockResolvedValue([guest(1, 'Иван Иванов'), guest(2, 'Петър Петров')]);
+        vi.mocked(api.listGroups).mockResolvedValue([
+            group(10, 'Семейство Иванови', [1]),
+            group(11, 'Приятели', [2]),
+        ]);
+        const { user } = renderWithTheme(<Builder eventId={1} onBack={vi.fn()} />);
+
+        // The first group is greeted by default, by first name.
+        expect(await screen.findByText('Иван')).toBeInTheDocument();
+
+        await user.click(screen.getByRole('combobox', { name: 'Покана за' }));
+        await user.click(screen.getByRole('option', { name: /Петър Петров/ }));
+        expect(screen.getByText('Петър')).toBeInTheDocument();
+        expect(screen.queryByText('Иван')).not.toBeInTheDocument();
+
+        await user.click(screen.getByRole('combobox', { name: 'Покана за' }));
+        await user.click(screen.getByRole('option', { name: /обща покана/ }));
+        expect(screen.getByText('гости')).toBeInTheDocument();
     });
 
     it('shows the error when loading fails', async () => {
-        vi.mocked(api.listImages).mockRejectedValue(new Error('not signed in'));
-        vi.mocked(api.getEvent).mockResolvedValue(eventInfo());
+        vi.mocked(api.getEvent).mockRejectedValue(new Error('not signed in'));
         renderWithTheme(<Builder eventId={1} onBack={vi.fn()} />);
         expect(await screen.findByText('not signed in')).toBeInTheDocument();
     });
 
     it('goes back to the event', async () => {
-        vi.mocked(api.listImages).mockResolvedValue([]);
         vi.mocked(api.getEvent).mockResolvedValue(eventInfo());
         const onBack = vi.fn();
         const { user } = renderWithTheme(<Builder eventId={1} onBack={onBack} />);

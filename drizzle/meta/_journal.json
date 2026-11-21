@@ -36,6 +36,13 @@
       "when": 1795272671855,
       "tag": "0004_menus",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795287804286,
+      "tag": "0005_invitation_text",
+      "breakpoints": true
     }
   ]
 }

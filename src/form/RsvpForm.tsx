@@ -1,10 +1,13 @@
-import { useState, type FormEvent } from 'react';
-import { Alert, Button, Paper, Stack, TextField, ToggleButton, ToggleButtonGroup } from '@mui/material';
-import type { FormFields, FormResponseInput } from '../../shared/types';
-import { answerLabel } from './answers';
+import { useState } from 'react';
+import { Alert, Button, Stack, TextField } from '@mui/material';
+import { MAX_NAME_LENGTH, type FormFields, type FormResponseInput } from '../../shared/types';
+import { answerLabel, ownAnswerLabel } from './answers';
+import AttendanceToggle from './AttendanceToggle';
 import ConfirmSubmitDialog from './ConfirmSubmitDialog';
+import FormCard from './FormCard';
 import GroupAnswer from './GroupAnswer';
 import SubmitSuccess from './SubmitSuccess';
+import { useConfirmedSubmit } from './useConfirmedSubmit';
 
 interface RsvpFormProps {
     fields: FormFields;
@@ -16,39 +19,22 @@ interface RsvpFormProps {
 export default function RsvpForm({ fields, onSubmit }: RsvpFormProps) {
     const [name, setName] = useState('');
     const [answer, setAnswer] = useState<boolean | null>(null);
-    const [confirming, setConfirming] = useState(false);
-    const [submitting, setSubmitting] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const complete = (!fields.showName || name.trim() !== '') && (!fields.showAnswer || answer !== null);
-
-    const review = (event: FormEvent) => {
-        event.preventDefault();
-        if (onSubmit && complete) setConfirming(true);
-    };
-
-    const send = async () => {
-        if (!onSubmit) return;
-        setSubmitting(true);
-        setError(null);
-        try {
-            await onSubmit({
-                ...(fields.showName && { name: name.trim() }),
-                ...(fields.showAnswer && answer !== null && { answer }),
-            });
-            setSubmitted(true);
-        } catch (e) {
-            setError((e as Error).message);
-        } finally {
-            setSubmitting(false);
-            setConfirming(false);
-        }
-    };
+    const submission = useConfirmedSubmit(
+        complete,
+        onSubmit &&
+            (() =>
+                onSubmit({
+                    ...(fields.showName && { name: name.trim() }),
+                    ...(fields.showAnswer && answer !== null && { answer }),
+                })),
+    );
+    const { submitting } = submission;
 
     return (
-        <Paper component="form" onSubmit={review} sx={{ p: 2.5, bgcolor: 'rgba(255, 255, 255, 0.92)' }}>
-            {submitted ? (
+        <FormCard onSubmit={submission.review}>
+            {submission.sent ? (
                 <SubmitSuccess />
             ) : (
                 <Stack spacing={1.5}>
@@ -58,44 +44,33 @@ export default function RsvpForm({ fields, onSubmit }: RsvpFormProps) {
                             label="Вашето име"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            slotProps={{ htmlInput: { maxLength: 100 } }}
+                            slotProps={{ htmlInput: { maxLength: MAX_NAME_LENGTH } }}
                             size="small"
                             fullWidth
                             disabled={submitting}
                         />
                     )}
                     {fields.showAnswer && (
-                        <ToggleButtonGroup
-                            exclusive
-                            fullWidth
-                            size="small"
-                            color="primary"
+                        <AttendanceToggle
                             value={answer}
-                            onChange={(_e, value: boolean | null) => setAnswer(value)}
+                            onChange={setAnswer}
                             disabled={submitting}
-                        >
-                            <ToggleButton value={true}>Ще присъствам</ToggleButton>
-                            <ToggleButton value={false}>Няма да присъствам</ToggleButton>
-                        </ToggleButtonGroup>
+                            label={ownAnswerLabel}
+                        />
                     )}
-                    {error && <Alert severity="error">{error}</Alert>}
+                    {submission.error && <Alert severity="error">{submission.error}</Alert>}
                     <Button type="submit" variant="contained" disabled={!onSubmit || !complete || submitting}>
                         Изпрати
                     </Button>
                 </Stack>
             )}
-            <ConfirmSubmitDialog
-                open={confirming}
-                submitting={submitting}
-                onCancel={() => setConfirming(false)}
-                onConfirm={() => void send()}
-            >
+            <ConfirmSubmitDialog {...submission.dialogProps}>
                 {fields.showName ? (
                     <GroupAnswer guests={[{ name: name.trim(), answer: fields.showAnswer ? answer : null }]} />
                 ) : (
                     answer !== null && <Alert severity="info">{answerLabel(answer)}</Alert>
                 )}
             </ConfirmSubmitDialog>
-        </Paper>
+        </FormCard>
     );
 }

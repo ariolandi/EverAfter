@@ -11,6 +11,7 @@ export const publishedForm = (overrides: Partial<PublishedForm> = {}): Published
     weddingDate: '2027-06-12',
     place: 'Пловдив',
     colors: ['#ffffff'],
+    invitationText: '',
     ...overrides,
 });
 

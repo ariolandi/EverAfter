@@ -14,11 +14,12 @@ const answerFor = (name: string, label: string) =>
     within(screen.getByRole('group', { name: `Отговор за ${name}` })).getByRole('button', { name: label });
 
 describe('GroupRsvpForm', () => {
-    it('shows the group name and its guests already filled in', () => {
+    it('has the group members filled in, without a heading of names', () => {
         renderWithTheme(
-            <GroupRsvpForm fields={fields} groupName="Семейство Иванови" guests={guests} response={null} onSubmit={vi.fn()} />,
+            <GroupRsvpForm fields={fields} guests={guests} response={null} onSubmit={vi.fn()} />,
         );
-        expect(screen.getByText('Семейство Иванови')).toBeInTheDocument();
+        expect(screen.queryByText('Иван Иванов и Мария Иванова')).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading')).not.toBeInTheDocument();
         expect(screen.getByText('Иван Иванов')).toBeInTheDocument();
         expect(screen.getByText('Мария Иванова')).toBeInTheDocument();
         expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
@@ -26,7 +27,7 @@ describe('GroupRsvpForm', () => {
 
     it('needs an answer for every guest', async () => {
         const { user } = renderWithTheme(
-            <GroupRsvpForm fields={fields} groupName="Семейство Иванови" guests={guests} response={null} onSubmit={vi.fn()} />,
+            <GroupRsvpForm fields={fields} guests={guests} response={null} onSubmit={vi.fn()} />,
         );
         const send = screen.getByRole('button', { name: 'Изпрати' });
         await user.click(answerFor('Иван Иванов', 'Ще присъства'));
@@ -41,7 +42,7 @@ describe('GroupRsvpForm', () => {
     it('confirms each guest’s answer before sending and warns it cannot be changed', async () => {
         const onSubmit = vi.fn();
         const { user } = renderWithTheme(
-            <GroupRsvpForm fields={fields} groupName="Семейство Иванови" guests={guests} response={null} onSubmit={onSubmit} />,
+            <GroupRsvpForm fields={fields} guests={guests} response={null} onSubmit={onSubmit} />,
         );
         await user.click(answerFor('Иван Иванов', 'Ще присъства'));
         await user.click(answerFor('Мария Иванова', 'Няма да присъства'));
@@ -61,7 +62,7 @@ describe('GroupRsvpForm', () => {
     it('sends one answer per guest on confirmation', async () => {
         const onSubmit = vi.fn().mockResolvedValue(undefined);
         const { user } = renderWithTheme(
-            <GroupRsvpForm fields={fields} groupName="Семейство Иванови" guests={guests} response={null} onSubmit={onSubmit} />,
+            <GroupRsvpForm fields={fields} guests={guests} response={null} onSubmit={onSubmit} />,
         );
         await user.click(answerFor('Иван Иванов', 'Ще присъства'));
         await user.click(answerFor('Мария Иванова', 'Няма да присъства'));
@@ -79,7 +80,7 @@ describe('GroupRsvpForm', () => {
         const { user } = renderWithTheme(
             <GroupRsvpForm
                 fields={{ showName: true, showAnswer: false }}
-                groupName="Семейство Иванови"
+               
                 guests={guests}
                 response={null}
                 onSubmit={onSubmit}
@@ -95,7 +96,7 @@ describe('GroupRsvpForm', () => {
     it('shows the error when sending fails', async () => {
         const onSubmit = vi.fn().mockRejectedValue(new Error('this invitation has already been answered'));
         const { user } = renderWithTheme(
-            <GroupRsvpForm fields={fields} groupName="Семейство Иванови" guests={guests} response={null} onSubmit={onSubmit} />,
+            <GroupRsvpForm fields={fields} guests={guests} response={null} onSubmit={onSubmit} />,
         );
         await user.click(answerFor('Иван Иванов', 'Ще присъства'));
         await user.click(answerFor('Мария Иванова', 'Ще присъства'));
@@ -114,7 +115,7 @@ describe('GroupRsvpForm', () => {
             ],
         };
         const onSubmit = vi.fn().mockResolvedValue(undefined);
-        const props = { fields, groupName: 'Семейство Иванови', guests, onSubmit };
+        const props = { fields, guests, onSubmit };
         const { user, rerender } = renderWithTheme(<GroupRsvpForm {...props} response={null} />);
         await user.click(answerFor('Иван Иванов', 'Ще присъства'));
         await user.click(answerFor('Мария Иванова', 'Ще присъства'));
@@ -131,7 +132,7 @@ describe('GroupRsvpForm', () => {
         renderWithTheme(
             <GroupRsvpForm
                 fields={fields}
-                groupName="Семейство Иванови"
+               
                 guests={guests}
                 response={{
                     respondedAt: '2026-11-19T10:00:00.000Z',
@@ -153,9 +154,14 @@ describe('GroupRsvpForm', () => {
 
     it('cannot be sent when the group has no guests', () => {
         renderWithTheme(
-            <GroupRsvpForm fields={fields} groupName="Празна" guests={[]} response={null} onSubmit={vi.fn()} />,
+            <GroupRsvpForm fields={fields} guests={[]} response={null} onSubmit={vi.fn()} />,
         );
         expect(screen.getByText('В тази покана все още няма гости.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Изпрати' })).toBeDisabled();
+    });
+
+    it('cannot be sent as a preview', () => {
+        renderWithTheme(<GroupRsvpForm fields={fields} guests={guests} response={null} />);
         expect(screen.getByRole('button', { name: 'Изпрати' })).toBeDisabled();
     });
 });

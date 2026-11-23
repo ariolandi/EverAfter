@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { HttpStatus } from '../shared/httpStatus.js';
-import { menusForGuest, type GroupInvitation } from '../shared/types.js';
+import { menusForGuest, TRANSPORT_OPTIONS, type GroupInvitation, type Transport } from '../shared/types.js';
 import { createGroupResponse, getGroupInvitation } from './db.js';
 
 /** Public routes behind a group's personal invitation link: anyone with the token can view and answer once. */
@@ -59,20 +59,37 @@ groupRouter.post('/:token/responses', async (req, res) => {
     return;
   }
   const menuByGuest = new Map<unknown, unknown>(answers.map((a) => [a?.guestId, a?.menuId]));
-  const picks: (number | null)[] = [];
+  const accommodationByGuest = new Map<unknown, unknown>(answers.map((a) => [a?.guestId, a?.accommodation]));
+  const transportByGuest = new Map<unknown, unknown>(answers.map((a) => [a?.guestId, a?.transport]));
+  const picks: { menuId: number | null; accommodation: boolean | null; transport: Transport | null }[] = [];
   for (const guest of found.guests) {
     const attending = !form.showAnswer || byGuest.get(guest.id) === true;
     const options = menusForGuest(found.menus, guest.isChild);
     const menuId = menuByGuest.get(guest.id);
     // Only guests who come choose a menu, and only from the ones meant for them: children's menus are for children.
-    if (!attending || options.length === 0) {
-      picks.push(null);
-    } else if (options.some((menu) => menu.id === menuId)) {
-      picks.push(menuId as number);
-    } else {
+    if (!attending) {
+      picks.push({ menuId: null, accommodation: null, transport: null });
+      continue;
+    }
+    if (options.length > 0 && !options.some((menu) => menu.id === menuId)) {
       res.status(HttpStatus.BAD_REQUEST).json({ error: `pick a menu for ${guest.name}` });
       return;
     }
+    const accommodation = accommodationByGuest.get(guest.id);
+    if (typeof accommodation !== 'boolean') {
+      res.status(HttpStatus.BAD_REQUEST).json({ error: `say whether ${guest.name} needs accommodation` });
+      return;
+    }
+    const transport = transportByGuest.get(guest.id);
+    if (!TRANSPORT_OPTIONS.includes(transport as Transport)) {
+      res.status(HttpStatus.BAD_REQUEST).json({ error: `say how ${guest.name} travels` });
+      return;
+    }
+    picks.push({
+      menuId: options.length > 0 ? (menuId as number) : null,
+      accommodation,
+      transport: transport as Transport,
+    });
   }
   const response = await createGroupResponse(
     found.form.id,
@@ -81,7 +98,7 @@ groupRouter.post('/:token/responses', async (req, res) => {
       guestId: g.id,
       name: g.name,
       answer: form.showAnswer ? (byGuest.get(g.id) as boolean) : null,
-      menuId: picks[i],
+      ...picks[i],
     })),
   );
   if (!response) {

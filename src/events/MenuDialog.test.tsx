@@ -16,7 +16,7 @@ describe('MenuDialog', () => {
         await user.type(screen.getByLabelText(/Салата/), 'Доматена салата');
         await user.type(screen.getByLabelText(/Предястие/), 'Палачинки');
         expect(save).toBeDisabled();
-        await user.type(screen.getByLabelText(/Основно ястие/), 'Пилешки хапки ');
+        await user.type(screen.getByLabelText(/Основно/), 'Пилешки хапки ');
         await user.click(save);
 
         expect(onSave).toHaveBeenCalledWith({
@@ -35,8 +35,8 @@ describe('MenuDialog', () => {
         expect(screen.getByLabelText(/Салата/)).toHaveValue('Шопска салата');
         expect(screen.getByLabelText('Детско меню')).not.toBeChecked();
 
-        await user.clear(screen.getByLabelText(/Основно ястие/));
-        await user.type(screen.getByLabelText(/Основно ястие/), 'Кавърма');
+        await user.clear(screen.getByLabelText(/Основно/));
+        await user.type(screen.getByLabelText(/Основно/), 'Кавърма');
         await user.click(screen.getByRole('button', { name: 'Запази' }));
         expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: 'Класическо меню', mainCourse: 'Кавърма' }));
     });

@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 import { HttpStatus } from '../shared/httpStatus.js';
-import type { Menu, PublishedForm } from '../shared/types.js';
+import type { GroupResponse, Menu, PublishedForm } from '../shared/types.js';
 import { createGroupResponse, getGroupInvitation, type GroupInvitationRecord } from './db.js';
 import { groupRouter } from './groups.js';
 import { appWith } from './test/app.js';
@@ -54,11 +54,11 @@ const record = (overrides: Partial<GroupInvitationRecord> = {}): GroupInvitation
   ...overrides,
 });
 
-const answered = {
+const answered: GroupResponse = {
   respondedAt: '2026-11-19T10:00:00.000Z',
   guests: [
-    { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null },
-    { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null },
+    { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null, accommodation: true, transport: 'own' },
+    { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null, accommodation: null, transport: null },
   ],
 };
 
@@ -114,38 +114,43 @@ describe('POST /api/groups/:token/responses', () => {
     const res = await post({
       answers: [
         { guestId: 2, answer: false },
-        { guestId: 1, answer: true },
+        { guestId: 1, answer: true, accommodation: true, transport: 'own' },
       ],
     });
 
     expect(res.status).toBe(HttpStatus.CREATED);
     expect(res.body).toEqual(answered);
     expect(createGroupResponse).toHaveBeenCalledWith(5, 10, [
-      { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null },
-      { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null },
+      { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null, accommodation: true, transport: 'own' },
+      { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null, accommodation: null, transport: null },
     ]);
   });
 
   it('records no yes/no when the invitation does not ask for it', async () => {
     vi.mocked(getGroupInvitation).mockResolvedValue(record({ form: { id: 5, form: { ...form, showAnswer: false } } }));
     vi.mocked(createGroupResponse).mockResolvedValue(answered);
-    const res = await post({ answers: [{ guestId: 1 }, { guestId: 2, answer: true }] });
+    const res = await post({
+      answers: [
+        { guestId: 1, accommodation: false, transport: 'needsHelp' },
+        { guestId: 2, answer: true, accommodation: true, transport: 'own' },
+      ],
+    });
 
     expect(res.status).toBe(HttpStatus.CREATED);
     expect(createGroupResponse).toHaveBeenCalledWith(5, 10, [
-      { guestId: 1, name: 'Иван Иванов', answer: null, menuId: null },
-      { guestId: 2, name: 'Мария Иванова', answer: null, menuId: null },
+      { guestId: 1, name: 'Иван Иванов', answer: null, menuId: null, accommodation: false, transport: 'needsHelp' },
+      { guestId: 2, name: 'Мария Иванова', answer: null, menuId: null, accommodation: true, transport: 'own' },
     ]);
   });
 
   it.each([
     ['no answers', {}],
-    ['a guest left out', { answers: [{ guestId: 1, answer: true }] }],
+    ['a guest left out', { answers: [{ guestId: 1, answer: true, accommodation: true, transport: 'own' }] }],
     [
       'a guest answered twice',
       {
         answers: [
-          { guestId: 1, answer: true },
+          { guestId: 1, answer: true, accommodation: true, transport: 'own' },
           { guestId: 1, answer: false },
         ],
       },
@@ -154,15 +159,15 @@ describe('POST /api/groups/:token/responses', () => {
       'a guest from outside the group',
       {
         answers: [
-          { guestId: 1, answer: true },
-          { guestId: 3, answer: true },
+          { guestId: 1, answer: true, accommodation: true, transport: 'own' },
+          { guestId: 3, answer: true, accommodation: true, transport: 'own' },
         ],
       },
     ],
     [
       'a missing yes/no',
       {
-        answers: [{ guestId: 1, answer: true }, { guestId: 2 }],
+        answers: [{ guestId: 1, answer: true, accommodation: true, transport: 'own' }, { guestId: 2 }],
       },
     ],
   ])('rejects %s', async (_case, body) => {
@@ -182,8 +187,8 @@ describe('POST /api/groups/:token/responses', () => {
     vi.mocked(getGroupInvitation).mockResolvedValue(record({ response: answered }));
     const res = await post({
       answers: [
-        { guestId: 1, answer: true },
-        { guestId: 2, answer: true },
+        { guestId: 1, answer: true, accommodation: true, transport: 'own' },
+        { guestId: 2, answer: true, accommodation: true, transport: 'own' },
       ],
     });
     expect(res.status).toBe(HttpStatus.CONFLICT);
@@ -195,11 +200,49 @@ describe('POST /api/groups/:token/responses', () => {
     vi.mocked(createGroupResponse).mockResolvedValue(undefined);
     const res = await post({
       answers: [
-        { guestId: 1, answer: true },
-        { guestId: 2, answer: true },
+        { guestId: 1, answer: true, accommodation: true, transport: 'own' },
+        { guestId: 2, answer: true, accommodation: true, transport: 'own' },
       ],
     });
     expect(res.status).toBe(HttpStatus.CONFLICT);
+  });
+
+  describe('accommodation and transport', () => {
+    const answerFor = (extra: object) => ({
+      answers: [
+        { guestId: 1, answer: true, accommodation: true, transport: 'own', ...extra },
+        { guestId: 2, answer: false },
+      ],
+    });
+
+    it('records them for guests who come and none for those who do not', async () => {
+      vi.mocked(getGroupInvitation).mockResolvedValue(record());
+      vi.mocked(createGroupResponse).mockResolvedValue(answered);
+      const res = await post({
+        answers: [
+          { guestId: 1, answer: true, accommodation: false, transport: 'arrangesOwn' },
+          // Anything sent for a guest who does not come is ignored.
+          { guestId: 2, answer: false, accommodation: true, transport: 'needsHelp' },
+        ],
+      });
+      expect(res.status).toBe(HttpStatus.CREATED);
+      expect(createGroupResponse).toHaveBeenCalledWith(5, 10, [
+        { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null, accommodation: false, transport: 'arrangesOwn' },
+        { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null, accommodation: null, transport: null },
+      ]);
+    });
+
+    it.each([
+      ['no accommodation answer', { accommodation: undefined }],
+      ['an accommodation answer that is not yes or no', { accommodation: 'yes' }],
+      ['no transport answer', { transport: undefined }],
+      ['an unknown transport', { transport: 'helicopter' }],
+    ])('refuses a guest who comes with %s', async (_label, extra) => {
+      vi.mocked(getGroupInvitation).mockResolvedValue(record());
+      const res = await post(answerFor(extra));
+      expect(res.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(createGroupResponse).not.toHaveBeenCalled();
+    });
   });
 
   describe('menus', () => {
@@ -221,14 +264,14 @@ describe('POST /api/groups/:token/responses', () => {
       vi.mocked(createGroupResponse).mockResolvedValue(answered);
       const res = await post({
         answers: [
-          { guestId: 1, answer: true, menuId: 20 },
-          { guestId: 2, answer: true, menuId: 21 },
+          { guestId: 1, answer: true, menuId: 20, accommodation: true, transport: 'own' },
+          { guestId: 2, answer: true, menuId: 21, accommodation: true, transport: 'own' },
         ],
       });
       expect(res.status).toBe(HttpStatus.CREATED);
       expect(createGroupResponse).toHaveBeenCalledWith(5, 10, [
-        { guestId: 1, name: 'Иван Иванов', answer: true, menuId: 20 },
-        { guestId: 2, name: 'Ники Иванов', answer: true, menuId: 21 },
+        { guestId: 1, name: 'Иван Иванов', answer: true, menuId: 20, accommodation: true, transport: 'own' },
+        { guestId: 2, name: 'Ники Иванов', answer: true, menuId: 21, accommodation: true, transport: 'own' },
       ]);
     });
 
@@ -237,8 +280,8 @@ describe('POST /api/groups/:token/responses', () => {
       vi.mocked(createGroupResponse).mockResolvedValue(answered);
       const res = await post({
         answers: [
-          { guestId: 1, answer: true, menuId: 20 },
-          { guestId: 2, answer: true, menuId: 20 },
+          { guestId: 1, answer: true, menuId: 20, accommodation: true, transport: 'own' },
+          { guestId: 2, answer: true, menuId: 20, accommodation: true, transport: 'own' },
         ],
       });
       expect(res.status).toBe(HttpStatus.CREATED);
@@ -248,8 +291,8 @@ describe('POST /api/groups/:token/responses', () => {
       withMenus();
       const res = await post({
         answers: [
-          { guestId: 1, answer: true, menuId: 21 },
-          { guestId: 2, answer: true, menuId: 21 },
+          { guestId: 1, answer: true, menuId: 21, accommodation: true, transport: 'own' },
+          { guestId: 2, answer: true, menuId: 21, accommodation: true, transport: 'own' },
         ],
       });
       expect(res.status).toBe(HttpStatus.BAD_REQUEST);
@@ -263,8 +306,8 @@ describe('POST /api/groups/:token/responses', () => {
       withMenus();
       const res = await post({
         answers: [
-          { guestId: 1, answer: true, menuId },
-          { guestId: 2, answer: true, menuId: 21 },
+          { guestId: 1, answer: true, menuId, accommodation: true, transport: 'own' },
+          { guestId: 2, answer: true, menuId: 21, accommodation: true, transport: 'own' },
         ],
       });
       expect(res.status).toBe(HttpStatus.BAD_REQUEST);
@@ -276,13 +319,13 @@ describe('POST /api/groups/:token/responses', () => {
       const res = await post({
         answers: [
           { guestId: 1, answer: false, menuId: 21 },
-          { guestId: 2, answer: true, menuId: 21 },
+          { guestId: 2, answer: true, menuId: 21, accommodation: true, transport: 'own' },
         ],
       });
       expect(res.status).toBe(HttpStatus.CREATED);
       expect(createGroupResponse).toHaveBeenCalledWith(5, 10, [
-        { guestId: 1, name: 'Иван Иванов', answer: false, menuId: null },
-        { guestId: 2, name: 'Ники Иванов', answer: true, menuId: 21 },
+        { guestId: 1, name: 'Иван Иванов', answer: false, menuId: null, accommodation: null, transport: null },
+        { guestId: 2, name: 'Ники Иванов', answer: true, menuId: 21, accommodation: true, transport: 'own' },
       ]);
     });
   });

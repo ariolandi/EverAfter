@@ -20,7 +20,7 @@ describe('MenusPanel', () => {
         expect(api.listMenus).toHaveBeenCalledWith(1);
         expect(classic).toHaveTextContent('СалатаШопска салата');
         expect(classic).toHaveTextContent('ПредястиеПълнени чушки');
-        expect(classic).toHaveTextContent('Основно ястиеСвинско с картофи');
+        expect(classic).toHaveTextContent('ОсновноСвинско с картофи');
     });
 
     it('points out that children have no menu yet', async () => {
@@ -38,7 +38,7 @@ describe('MenusPanel', () => {
         await user.click(within(dialog).getByLabelText('Детско меню'));
         await user.type(within(dialog).getByLabelText(/Салата/), 'Шопска салата');
         await user.type(within(dialog).getByLabelText(/Предястие/), 'Пълнени чушки');
-        await user.type(within(dialog).getByLabelText(/Основно ястие/), 'Пилешки хапки');
+        await user.type(within(dialog).getByLabelText(/Основно/), 'Пилешки хапки');
         await user.click(within(dialog).getByRole('button', { name: 'Запази' }));
 
         expect(api.createMenu).toHaveBeenCalledWith(1, expect.objectContaining({ name: 'Детско меню', isChild: true }));

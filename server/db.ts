@@ -16,6 +16,7 @@ import type {
   ScheduleItem,
   ScheduleItemInput,
   Task,
+  Transport,
   User,
 } from '../shared/types.js';
 import {
@@ -234,7 +235,10 @@ export async function createImage(
   return toImage(row);
 }
 
-export async function getImageFile(userId: number, id: number): Promise<{ mimeType: string; data: Buffer } | undefined> {
+export async function getImageFile(
+  userId: number,
+  id: number,
+): Promise<{ mimeType: string; data: Buffer } | undefined> {
   const [row] = await db
     .select({ mimeType: images.mimeType, data: images.data })
     .from(images)
@@ -358,7 +362,10 @@ export async function listMenus(eventId: number): Promise<Menu[]> {
 }
 
 export async function createMenu(eventId: number, input: MenuInput): Promise<Menu> {
-  const [row] = await db.insert(menus).values({ eventId, ...input }).returning();
+  const [row] = await db
+    .insert(menus)
+    .values({ eventId, ...input })
+    .returning();
   return toMenu(row);
 }
 
@@ -395,6 +402,8 @@ const responseColumns = {
   name: formResponses.name,
   answer: formResponses.answer,
   menuId: formResponses.menuId,
+  accommodation: formResponses.accommodation,
+  transport: formResponses.transport,
   createdAt: formResponses.createdAt,
 };
 
@@ -405,6 +414,8 @@ type ResponseRow = {
   name: string | null;
   answer: boolean | null;
   menuId: number | null;
+  accommodation: boolean | null;
+  transport: Transport | null;
   createdAt: Date;
 };
 
@@ -417,7 +428,14 @@ function toGroupResponses(rows: ResponseRow[]) {
       response = { respondedAt: row.createdAt.toISOString(), guests: [] };
       byGroup.set(row.groupId, response);
     }
-    response.guests.push({ guestId: row.guestId, name: row.name ?? '', answer: row.answer, menuId: row.menuId });
+    response.guests.push({
+      guestId: row.guestId,
+      name: row.name ?? '',
+      answer: row.answer,
+      menuId: row.menuId,
+      accommodation: row.accommodation,
+      transport: row.transport,
+    });
   }
   return byGroup;
 }
@@ -579,7 +597,14 @@ export async function getGroupInvitation(token: string): Promise<GroupInvitation
 export async function createGroupResponse(
   formId: number,
   groupId: number,
-  answers: { guestId: number; name: string; answer: boolean | null; menuId: number | null }[],
+  answers: {
+    guestId: number;
+    name: string;
+    answer: boolean | null;
+    menuId: number | null;
+    accommodation: boolean | null;
+    transport: Transport | null;
+  }[],
 ): Promise<GroupResponse | undefined> {
   const rows = await db.transaction(async (tx) => {
     await tx.select({ id: guestGroups.id }).from(guestGroups).where(eq(guestGroups.id, groupId)).for('update');
@@ -590,7 +615,18 @@ export async function createGroupResponse(
     if (already > 0) return undefined;
     return tx
       .insert(formResponses)
-      .values(answers.map((a) => ({ formId, groupId, guestId: a.guestId, name: a.name, answer: a.answer, menuId: a.menuId })))
+      .values(
+        answers.map((a) => ({
+          formId,
+          groupId,
+          guestId: a.guestId,
+          name: a.name,
+          answer: a.answer,
+          menuId: a.menuId,
+          accommodation: a.accommodation,
+          transport: a.transport,
+        })),
+      )
       .returning(responseColumns);
   });
   return rows && toGroupResponses(rows).get(groupId);
@@ -635,9 +671,7 @@ export async function deleteForm(viewer: Viewer, slug: string): Promise<boolean>
   return deleted.length > 0;
 }
 
-export async function getForm(
-  slug: string,
-): Promise<{ id: number; eventId: number; form: PublishedForm } | undefined> {
+export async function getForm(slug: string): Promise<{ id: number; eventId: number; form: PublishedForm } | undefined> {
   const [row] = await db.select().from(forms).where(eq(forms.slug, slug));
   return row && { id: row.id, eventId: row.eventId, form: toForm(row) };
 }
@@ -666,7 +700,10 @@ export async function listScheduleItems(eventId: number): Promise<ScheduleItem[]
 }
 
 export async function createScheduleItem(eventId: number, input: ScheduleItemInput): Promise<ScheduleItem> {
-  const [row] = await db.insert(scheduleItems).values({ eventId, ...input }).returning();
+  const [row] = await db
+    .insert(scheduleItems)
+    .values({ eventId, ...input })
+    .returning();
   return toScheduleItem(row);
 }
 

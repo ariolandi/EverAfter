@@ -1,4 +1,4 @@
-import type { ColorUsage, DressCode } from '../shared/types.js';
+import type { ColorUsage, DressCode, Transport } from '../shared/types.js';
 import {
   boolean,
   customType,
@@ -198,6 +198,9 @@ export const formResponses = pgTable(
     answer: boolean('answer'),
     // The menu the guest picked; kept as null if the menu is later deleted.
     menuId: integer('menu_id').references(() => menus.id, { onDelete: 'set null' }),
+    // Set for guests who come: whether they use the accommodation, and how they travel.
+    accommodation: boolean('accommodation'),
+    transport: text('transport').$type<Transport>(),
     createdAt: createdAt(),
   },
   (t) => [index('form_responses_form_id').on(t.formId), index('form_responses_group_id').on(t.groupId)],

@@ -201,8 +201,8 @@ describe('RsvpForm for a group', () => {
         const response: GroupResponse = {
             respondedAt: '2026-11-19T10:00:00.000Z',
             guests: [
-                { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null },
-                { guestId: 2, name: 'Мария Иванова', answer: true, menuId: null },
+                { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null, accommodation: null, transport: null },
+                { guestId: 2, name: 'Мария Иванова', answer: true, menuId: null, accommodation: null, transport: null },
             ],
         };
         const onSubmit = vi.fn().mockResolvedValue(undefined);
@@ -228,8 +228,8 @@ describe('RsvpForm for a group', () => {
                 response={{
                     respondedAt: '2026-11-19T10:00:00.000Z',
                     guests: [
-                        { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null },
-                        { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null },
+                        { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null, accommodation: null, transport: null },
+                        { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null, accommodation: null, transport: null },
                     ],
                 }}
                 onSubmit={vi.fn()}

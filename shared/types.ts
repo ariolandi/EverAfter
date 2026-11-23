@@ -178,12 +178,23 @@ export interface FormResponseInput {
 }
 
 /** One guest's answer sent from a group link. */
+/**
+ * How a guest gets to the event: with their own transport, or without it and either wanting the organizers' help
+ * or arranging it themselves.
+ */
+export const TRANSPORT_OPTIONS = ['own', 'needsHelp', 'arrangesOwn'] as const;
+export type Transport = (typeof TRANSPORT_OPTIONS)[number];
+
 export interface GroupGuestAnswer {
   guestId: number;
   /** Omitted when the invitation doesn't ask whether they will attend. */
   answer?: boolean;
   /** The menu the guest picked; required when the guest comes and has a menu to choose from. */
   menuId?: number;
+  /** Whether the guest will use the offered accommodation; required when the guest comes. */
+  accommodation?: boolean;
+  /** How the guest travels; required when the guest comes. */
+  transport?: Transport;
 }
 
 export interface GroupResponseInput {
@@ -198,6 +209,10 @@ export interface GroupGuestResponse {
   answer: boolean | null;
   /** The menu the guest picked; null if they didn't pick one, or it has since been deleted. */
   menuId: number | null;
+  /** Null if the guest doesn't come. */
+  accommodation: boolean | null;
+  /** Null if the guest doesn't come. */
+  transport: Transport | null;
 }
 
 /** A group's answer, once it has been sent. */

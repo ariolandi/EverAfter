@@ -8,6 +8,7 @@ import { scriptFont } from '../theme/typography';
 import { joinGuestNames } from './guestNames';
 import RsvpForm from './RsvpForm';
 import MenusPage from './MenusPage';
+import ScaledFrame from './ScaledFrame';
 import ScheduleDressCode from './ScheduleDressCode';
 import { GoldRule } from '../components/goldRule';
 import { Subtitle } from '../components/subtitle';
@@ -30,8 +31,8 @@ interface Props {
     schedule?: ScheduleItem[];
     /** The event's menus, shown on a page of their own; omit (or leave empty) to skip that page. */
     menus?: Menu[];
-    /** Page where guests pick their menus, between the menus and the answer; omit to skip it. */
-    menuSelection?: ReactNode;
+    /** Pages after the menus where guests make their choices (menu, accommodation, transport), one per element. */
+    guestPages?: ReactNode[];
 }
 
 interface PageProps {
@@ -171,7 +172,7 @@ export default function InvitationForm({
     guestNames = [],
     schedule = [],
     menus = [],
-    menuSelection,
+    guestPages = [],
 }: Props) {
     const coupleTitle = [details.brideName, details.groomName]
         .map((n) => n.trim())
@@ -245,13 +246,13 @@ export default function InvitationForm({
                 </Stack>,
         // The schedule page keeps the cover's colours too.
         <ScheduleDressCode details={details} schedule={schedule} textColor={textColor} accentColor={nameColor} />,
-        ...(menus.length > 0 ? [<MenusPage menus={menus} textColor={textColor} accentColor={nameColor} />] : []),
-        ...(menuSelection ? [tinted(menuSelection)] : []),
         // The answer page keeps the cover's colours: text in the primary, guests' names in the secondary.
         tinted(responseForm ?? <RsvpForm fields={fields} onSubmit={onSubmit} />),
+        ...(menus.length > 0 ? [<MenusPage menus={menus} textColor={textColor} accentColor={nameColor} />] : []),
+        ...guestPages.map(tinted),
     ];
 
-    return (
+    const scroller = (
         <Box
             ref={scrollRef}
             onScrollEnd={reportScrolledPage}
@@ -277,4 +278,7 @@ export default function InvitationForm({
             ))}
         </Box>
     );
+
+    // Everything is laid out at one design size and scaled to the screen, so it looks the same on every device.
+    return <ScaledFrame>{scroller}</ScaledFrame>;
 }

@@ -29,7 +29,7 @@ export default function MenuChoice({ guests, menus, choices, onChange, disabled 
                             select
                             size="small"
                             fullWidth
-                            label={`Меню за ${guest.name}`}
+                            label={'Меню'}
                             value={choices[guest.id] ?? ''}
                             onChange={(e) => onChange?.(guest.id, Number(e.target.value))}
                             disabled={disabled || !onChange || options.length === 0}

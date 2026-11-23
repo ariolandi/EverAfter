@@ -5,7 +5,6 @@ import KeyboardArrowUp from '@mui/icons-material/KeyboardArrowUp';
 import type { InvitationDetails, FormFields, FormResponseInput, Menu, ScheduleItem } from '../../shared/types';
 import { isoToLongDate } from '../dates';
 import { scriptFont } from '../theme/typography';
-import { palette } from '../theme/palette';
 import { joinGuestNames } from './guestNames';
 import RsvpForm from './RsvpForm';
 import MenusPage from './MenusPage';
@@ -78,16 +77,23 @@ const concaveCornersMask = (radius: number, offset = 0) => {
     ].join(', ');
 };
 
-/** Gold arcs hugging the cut-out corners, so the border runs unbroken round them. */
+/**
+ * Brushed-gold sheen running corner to corner along the border.
+ * `METAL_CORNERS` are the colours it takes at each corner, so the arcs there match the straight sides.
+ */
+const METAL_STOPS = ['#f5e6a8 0%', '#b8902f 22%', '#fbf0c4 40%', '#9a7220 58%', '#e6cf85 78%', '#a97f26 100%'];
+const METAL_BORDER = `linear-gradient(to bottom right, ${METAL_STOPS.join(', ')})`;
+const METAL_CORNERS = { topLeft: '#f5e6a8', topRight: '#d9bd6a', bottomLeft: '#d9bd6a', bottomRight: '#a97f26' };
+
+/** Metal arcs hugging the cut-out corners, so the border runs unbroken round them. */
 const goldCornerRings = (radius: number) => {
-    const gold = palette.primary.main;
-    const ring = (at: string, position: string) =>
-        `radial-gradient(circle at ${at}, transparent ${radius}px, ${gold} ${radius}px, ${gold} ${radius + EDGE}px, transparent ${radius + EDGE}px) ${position} / 51% 51% no-repeat border-box`;
+    const ring = (at: string, position: string, color: string) =>
+        `radial-gradient(circle at ${at}, transparent ${radius}px, ${color} ${radius}px, ${color} ${radius + EDGE}px, transparent ${radius + EDGE}px) ${position} / 51% 51% no-repeat border-box`;
     return [
-        ring('0 0', 'top left'),
-        ring('100% 0', 'top right'),
-        ring('0 100%', 'bottom left'),
-        ring('100% 100%', 'bottom right'),
+        ring('0 0', 'top left', METAL_CORNERS.topLeft),
+        ring('100% 0', 'top right', METAL_CORNERS.topRight),
+        ring('0 100%', 'bottom left', METAL_CORNERS.bottomLeft),
+        ring('100% 100%', 'bottom right', METAL_CORNERS.bottomRight),
     ].join(', ');
 };
 
@@ -106,7 +112,8 @@ const plaqueSx = {
     scrollbarWidth: 'none',
     // Straight sides are the border; the arched corners get their gold from background rings, since a border can't follow an arc.
     border: `solid ${EDGE}px`,
-    borderColor: 'primary.main',
+    borderImage: `${METAL_BORDER} 1`,
+    boxShadow: 'inset 0 0 6px rgba(90, 60, 10, 0.25)',
     background: `${goldCornerRings(CORNER_RADIUS)}, rgba(255, 255, 255, ${PLAQUE_OPACITY})`,
     mask: concaveCornersMask(CORNER_RADIUS),
     // Content sits above the fill.

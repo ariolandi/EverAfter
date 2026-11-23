@@ -3,7 +3,7 @@ import { MENU_COURSE_KEYS, type MenuCourses } from '../../shared/types';
 const LABELS: Record<keyof MenuCourses, string> = {
     salad: 'Салата',
     appetizer: 'Предястие',
-    mainCourse: 'Основно ястие',
+    mainCourse: 'Основно',
 };
 
 /** The courses every menu has, in the order they are served. */

@@ -1,8 +1,8 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { publishedForm } from '../test/fixtures';
+import { publishedForm, scheduleItem } from '../test/fixtures';
 import { renderWithTheme } from '../test/render';
-import GroupRsvpForm from './GroupRsvpForm';
+import RsvpForm from './RsvpForm';
 import InvitationForm from './InvitationForm';
 
 const form = publishedForm();
@@ -38,7 +38,7 @@ describe('InvitationForm', () => {
                 details={details}
                 imageUrl={null}
                 guestNames={['Петър']}
-                responseForm={<GroupRsvpForm fields={form} guests={[{ id: 1, name: 'Петър Петров' }]} response={null} />}
+                responseForm={<RsvpForm fields={form} guests={[{ id: 1, name: 'Петър Петров' }]} response={null} />}
             />,
         );
         expect(screen.getByText('Петър Петров')).toHaveStyle({ color: '#654321' });
@@ -56,7 +56,8 @@ describe('InvitationForm', () => {
     it('sets off the guests and the place with a gold rule each', () => {
         const { container } = renderWithTheme(<InvitationForm fields={form} details={form} imageUrl={null} />);
         const rules = Array.from(container.querySelectorAll('hr'));
-        expect(rules).toHaveLength(2);
+        // Two on the cover, and one setting off the dress code on the schedule page.
+        expect(rules).toHaveLength(3);
         const [afterGuests, afterPlace] = rules;
         expect(afterGuests.previousElementSibling).toHaveTextContent('гости');
         expect(afterPlace.previousElementSibling).toHaveTextContent('Пловдив');
@@ -108,8 +109,18 @@ describe('InvitationForm', () => {
         const { user } = renderWithTheme(
             <InvitationForm fields={form} details={form} imageUrl={null} page={0} onPageChange={onPageChange} />,
         );
-        await user.click(screen.getByRole('button', { name: 'Към следващата страница' }));
+        // The cover's arrow is the first one on the page.
+        await user.click(screen.getAllByRole('button', { name: 'Към следващата страница' })[0]);
         expect(onPageChange).toHaveBeenCalledWith(1);
+    });
+
+    it('asks the parent to move from the schedule page to the answer page', async () => {
+        const onPageChange = vi.fn();
+        const { user } = renderWithTheme(
+            <InvitationForm fields={form} details={form} imageUrl={null} page={1} onPageChange={onPageChange} />,
+        );
+        await user.click(screen.getAllByRole('button', { name: 'Към следващата страница' })[1]);
+        expect(onPageChange).toHaveBeenCalledWith(2);
     });
 
     it('asks the parent to move back from the second page', async () => {
@@ -117,8 +128,17 @@ describe('InvitationForm', () => {
         const { user } = renderWithTheme(
             <InvitationForm fields={form} details={form} imageUrl={null} page={1} onPageChange={onPageChange} />,
         );
-        await user.click(screen.getByRole('button', { name: 'Към предишната страница' }));
+        await user.click(screen.getAllByRole('button', { name: 'Към предишната страница' })[0]);
         expect(onPageChange).toHaveBeenCalledWith(0);
+    });
+
+    it('asks the parent to move back from the answer page to the schedule page', async () => {
+        const onPageChange = vi.fn();
+        const { user } = renderWithTheme(
+            <InvitationForm fields={form} details={form} imageUrl={null} page={2} onPageChange={onPageChange} />,
+        );
+        await user.click(screen.getAllByRole('button', { name: 'Към предишната страница' })[1]);
+        expect(onPageChange).toHaveBeenCalledWith(1);
     });
 
     it('scrolls to the page it is given', () => {
@@ -126,5 +146,52 @@ describe('InvitationForm', () => {
         renderWithTheme(<InvitationForm fields={form} details={form} imageUrl={null} page={1} />);
         expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }));
         scrollTo.mockRestore();
+    });
+
+    describe('schedule page', () => {
+        const items = [
+            scheduleItem({ id: 1, title: 'Церемония', startTime: '15:00', place: 'Градината' }),
+            scheduleItem({ id: 2, title: 'Вечеря', startTime: '19:30', place: 'Ресторантът' }),
+        ];
+
+        it('lists the schedule with times in 24-hour format and places', () => {
+            renderWithTheme(<InvitationForm fields={form} details={form} imageUrl={null} schedule={items} />);
+            expect(screen.getByRole('heading', { name: 'Програма' })).toBeInTheDocument();
+            const [ceremony, dinner] = screen.getAllByRole('listitem').slice(0, 2);
+            expect(ceremony).toHaveTextContent('15:00 · Церемония');
+            expect(ceremony).toHaveTextContent('Градината');
+            expect(dinner).toHaveTextContent('19:30 · Вечеря');
+        });
+
+        it('leaves out the schedule when the event has none', () => {
+            renderWithTheme(<InvitationForm fields={form} details={form} imageUrl={null} />);
+            expect(screen.queryByRole('heading', { name: 'Програма' })).not.toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: 'Дрескод' })).toBeInTheDocument();
+        });
+
+        it.each([
+            ['cocktail', 'коктейлно'],
+            ['formal', 'официално'],
+        ] as const)('shows a %s dress code', (dressCode, label) => {
+            renderWithTheme(<InvitationForm fields={form} details={{ ...form, dressCode }} imageUrl={null} />);
+            expect(screen.getByText(`Препоръчително е ${label} облекло`)).toBeInTheDocument();
+        });
+
+        it('shows the event colours', () => {
+            const details = { ...form, colors: ['#111111', '#c9a227', '#ffffff'] };
+            renderWithTheme(<InvitationForm fields={form} details={details} imageUrl={null} />);
+            const swatches = within(screen.getByRole('list', { name: 'Цветове' })).getAllByRole('listitem');
+            expect(swatches.map((s) => s.getAttribute('aria-label'))).toEqual(['#111111', '#c9a227', '#ffffff']);
+            expect(swatches[1]).toHaveStyle({ backgroundColor: '#c9a227' });
+        });
+
+        it.each([
+            ['mandatory', 'Моля, спазвайте цветовете на сватбата'],
+            ['suggested', 'Ще се радваме, ако облеклото ви е в тези цветове'],
+            ['informative', 'Цветовете на нашата сватба'],
+        ] as const)('tells guests the colours are %s', (colorUsage, note) => {
+            renderWithTheme(<InvitationForm fields={form} details={{ ...form, colorUsage }} imageUrl={null} />);
+            expect(screen.getByText(note)).toBeInTheDocument();
+        });
     });
 });

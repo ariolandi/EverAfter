@@ -14,6 +14,8 @@ export const publishedForm = (overrides: Partial<PublishedForm> = {}): Published
     primaryColor: 0,
     secondaryColor: 1,
     invitationText: '',
+    dressCode: 'cocktail',
+    colorUsage: 'informative',
     ...overrides,
 });
 

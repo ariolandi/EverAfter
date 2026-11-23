@@ -196,6 +196,8 @@ export const formResponses = pgTable(
     guestId: integer('guest_id').references(() => guests.id, { onDelete: 'set null' }),
     name: text('name'),
     answer: boolean('answer'),
+    // The menu the guest picked; kept as null if the menu is later deleted.
+    menuId: integer('menu_id').references(() => menus.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },
   (t) => [index('form_responses_form_id').on(t.formId), index('form_responses_group_id').on(t.groupId)],

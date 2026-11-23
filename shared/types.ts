@@ -19,6 +19,9 @@ export interface GeneratedImage {
   url: string;
 }
 
+/** Largest picture, in bytes, that can be uploaded as an invitation's background. */
+export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+
 /** Which components the builder has toggled on. */
 export interface FormFields {
   showName: boolean;
@@ -86,6 +89,8 @@ export interface PublishedForm extends FormFields, InvitationDetails {
 /** An invitation as a guest sees it: with the event's schedule for its schedule page. */
 export interface SharedInvitation extends PublishedForm {
   schedule: ScheduleItem[];
+  /** The event's menus, shown on the invitation's menus page. */
+  menus: Menu[];
 }
 
 export interface EventInfo {
@@ -147,6 +152,10 @@ export interface Menu extends MenuInput {
   createdAt: string;
 }
 
+/** The menus a guest may pick: children may have any, but the children's menus are only for children. */
+export const menusForGuest = <M extends { isChild: boolean }>(menus: M[], isChild: boolean): M[] =>
+  isChild ? menus : menus.filter((menu) => !menu.isChild);
+
 /** The shape of a schedule item's start time: 24-hour HH:MM. */
 export const SCHEDULE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -173,6 +182,8 @@ export interface GroupGuestAnswer {
   guestId: number;
   /** Omitted when the invitation doesn't ask whether they will attend. */
   answer?: boolean;
+  /** The menu the guest picked; required when the guest comes and has a menu to choose from. */
+  menuId?: number;
 }
 
 export interface GroupResponseInput {
@@ -185,6 +196,8 @@ export interface GroupGuestResponse {
   guestId: number | null;
   name: string;
   answer: boolean | null;
+  /** The menu the guest picked; null if they didn't pick one, or it has since been deleted. */
+  menuId: number | null;
 }
 
 /** A group's answer, once it has been sent. */
@@ -215,6 +228,8 @@ export interface GroupInvitation {
   form: PublishedForm;
   schedule: ScheduleItem[];
   groupName: string;
-  guests: { id: number; name: string }[];
+  guests: { id: number; name: string; isChild: boolean }[];
+  /** The event's menus, for the menus page and for each guest to pick from. */
+  menus: Menu[];
   response: GroupResponse | null;
 }

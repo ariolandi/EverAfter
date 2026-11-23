@@ -23,6 +23,7 @@ import {
   getForm,
   getFormImage,
   getImageFile,
+  listMenus,
   listScheduleItems,
   updateForm,
 } from './db.js';
@@ -177,7 +178,9 @@ formRouter.get('/:slug', async (req, res) => {
     res.status(HttpStatus.NOT_FOUND).json({ error: 'form not found' });
     return;
   }
-  const invitation: SharedInvitation = { ...found.form, schedule: await listScheduleItems(found.eventId) };
+  const invitation: SharedInvitation = { ...found.form, schedule: await listScheduleItems(found.eventId),
+    menus: await listMenus(found.eventId),
+  };
   res.json(invitation);
 });
 

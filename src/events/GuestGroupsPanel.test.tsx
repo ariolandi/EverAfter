@@ -38,7 +38,7 @@ describe('GuestGroupsPanel', () => {
                         guestIds: [3],
                         response: {
                             respondedAt: '2026-11-19T10:00:00.000Z',
-                            guests: [{ guestId: 3, name: 'Петър Петров', answer: false }],
+                            guests: [{ guestId: 3, name: 'Петър Петров', answer: false, menuId: null }],
                         },
                     }),
                 ]}

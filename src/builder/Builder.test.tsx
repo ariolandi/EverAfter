@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Guest, GuestGroup } from '../../shared/types';
 import { api } from '../api';
-import { eventInfo, publishedForm } from '../test/fixtures';
+import { eventInfo, publishedForm, scheduleItem } from '../test/fixtures';
 import { renderWithTheme } from '../test/render';
 import Builder from './Builder';
 
@@ -29,6 +29,8 @@ describe('Builder', () => {
     beforeEach(() => {
         vi.mocked(api.listGuests).mockResolvedValue([]);
         vi.mocked(api.listGroups).mockResolvedValue([]);
+        vi.mocked(api.listSchedule).mockResolvedValue([]);
+        vi.mocked(api.listMenus).mockResolvedValue([]);
     });
 
     it('publishes a new invitation once the details are filled in', async () => {
@@ -60,6 +62,8 @@ describe('Builder', () => {
                 primaryColor: 0,
                 secondaryColor: 1,
                 invitationText: '',
+                dressCode: 'cocktail',
+                colorUsage: 'informative',
             },
         );
         expect(await screen.findByText('Поканата е запазена')).toBeInTheDocument();
@@ -102,14 +106,44 @@ describe('Builder', () => {
         );
     });
 
-    it('saves and moves to the guests step with Напред', async () => {
+    it('saves and moves through the schedule step to the guests step with Напред', async () => {
         vi.mocked(api.getEvent).mockResolvedValue(eventInfo({ invitation: publishedForm() }));
         vi.mocked(api.updateForm).mockResolvedValue(publishedForm());
         const { user } = renderWithTheme(<Builder eventId={1} onBack={vi.fn()} />);
 
         await user.click(await screen.findByRole('button', { name: 'Напред' }));
-        expect(api.updateForm).toHaveBeenCalled();
+        expect(api.updateForm).toHaveBeenCalledTimes(1);
+        expect(await screen.findByRole('radiogroup', { name: 'Дрескод' })).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Напред' }));
+        expect(api.updateForm).toHaveBeenCalledTimes(2);
         expect(await screen.findByText(/Все още няма групи гости/)).toBeInTheDocument();
+    });
+
+    it('saves the dress code and how strictly the colours apply', async () => {
+        vi.mocked(api.getEvent).mockResolvedValue(eventInfo({ invitation: publishedForm() }));
+        vi.mocked(api.listSchedule).mockResolvedValue([scheduleItem()]);
+        vi.mocked(api.updateForm).mockResolvedValue(publishedForm());
+        const { user } = renderWithTheme(<Builder eventId={1} onBack={vi.fn()} />);
+
+        await user.click(await screen.findByRole('tab', { name: /Програма и дрескод/ }));
+        // The event's schedule feeds the preview and is listed here.
+        expect(screen.getAllByText(/15:00 · Церемония/).length).toBeGreaterThan(0);
+        expect(screen.getByRole('radio', { name: 'коктейлно' })).toBeChecked();
+        expect(screen.getByRole('radio', { name: 'Информативни' })).toBeChecked();
+
+        await user.click(screen.getByRole('radio', { name: 'официално' }));
+        await user.click(screen.getByRole('radio', { name: 'Задължителни' }));
+        // The preview follows the choices.
+        expect(screen.getByText('Моля, спазвайте цветовете на сватбата')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Запази' }));
+
+        expect(api.updateForm).toHaveBeenCalledWith(
+            'abc123',
+            null,
+            expect.anything(),
+            expect.objectContaining({ dressCode: 'formal', colorUsage: 'mandatory' }),
+        );
     });
 
     it('previews the invitation of the guest group picked on the guests step', async () => {
@@ -170,6 +204,11 @@ describe('Builder', () => {
         await user.click(screen.getByRole('option', { name: 'Петър Петров' }));
         expect(screen.getByText('Петър')).toBeInTheDocument();
         expect(screen.queryByText('Иван')).not.toBeInTheDocument();
+
+        // On the guests step they answer by name, like a group of one, instead of typing their name in.
+        await user.click(screen.getByRole('tab', { name: /Гости/ }));
+        expect(screen.getByRole('group', { name: 'Отговор за Петър Петров' })).toBeInTheDocument();
+        expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     });
 
     it('shows the error when loading fails', async () => {

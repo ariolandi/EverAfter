@@ -18,6 +18,7 @@ import type {
   PublishedForm,
   ScheduleItem,
   ScheduleItemInput,
+  SharedInvitation,
   Task,
   User,
 } from '../shared/types';
@@ -53,6 +54,12 @@ export const api = {
   listImages: () => request<GeneratedImage[]>('/api/images'),
   generateImage: (prompt: string) =>
     request<GeneratedImage>('/api/images', { method: 'POST', body: JSON.stringify({ prompt }) }),
+  uploadImage: (file: File) =>
+    request<GeneratedImage>(`/api/images/upload?name=${encodeURIComponent(file.name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    }),
   deleteImage: (id: number) => request<void>(`/api/images/${id}`, { method: 'DELETE' }),
 
   listEvents: () => request<EventInfo[]>('/api/events'),
@@ -111,7 +118,7 @@ export const api = {
       body: JSON.stringify({ imageId, ...fields, ...details }),
     }),
   deleteForm: (slug: string) => request<void>(`/api/forms/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
-  getForm: (slug: string) => request<PublishedForm>(`/api/forms/${encodeURIComponent(slug)}`),
+  getForm: (slug: string) => request<SharedInvitation>(`/api/forms/${encodeURIComponent(slug)}`),
   submitFormResponse: (slug: string, response: FormResponseInput) =>
     request<void>(`/api/forms/${encodeURIComponent(slug)}/responses`, {
       method: 'POST',

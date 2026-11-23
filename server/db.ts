@@ -394,6 +394,7 @@ const responseColumns = {
   guestId: formResponses.guestId,
   name: formResponses.name,
   answer: formResponses.answer,
+  menuId: formResponses.menuId,
   createdAt: formResponses.createdAt,
 };
 
@@ -403,6 +404,7 @@ type ResponseRow = {
   guestId: number | null;
   name: string | null;
   answer: boolean | null;
+  menuId: number | null;
   createdAt: Date;
 };
 
@@ -415,7 +417,7 @@ function toGroupResponses(rows: ResponseRow[]) {
       response = { respondedAt: row.createdAt.toISOString(), guests: [] };
       byGroup.set(row.groupId, response);
     }
-    response.guests.push({ guestId: row.guestId, name: row.name ?? '', answer: row.answer });
+    response.guests.push({ guestId: row.guestId, name: row.name ?? '', answer: row.answer, menuId: row.menuId });
   }
   return byGroup;
 }
@@ -531,7 +533,9 @@ export async function deleteGroup(eventId: number, id: number): Promise<boolean>
 export interface GroupInvitationRecord {
   groupId: number;
   groupName: string;
-  guests: { id: number; name: string }[];
+  guests: { id: number; name: string; isChild: boolean }[];
+  /** The event's menus. */
+  menus: Menu[];
   /** The event's invitation, or null if it hasn't been published yet. */
   form: { id: number; form: PublishedForm } | null;
   /** The event's schedule, shown on the invitation's schedule page. */
@@ -547,19 +551,21 @@ export async function getGroupInvitation(token: string): Promise<GroupInvitation
     .leftJoin(forms, eq(forms.eventId, guestGroups.eventId))
     .where(eq(guestGroups.token, token));
   if (!row) return undefined;
-  const [members, responses, schedule] = await Promise.all([
+  const [members, responses, schedule, eventMenus] = await Promise.all([
     db
-      .select({ id: guests.id, name: guests.name })
+      .select({ id: guests.id, name: guests.name, isChild: guests.isChild })
       .from(guests)
       .where(eq(guests.groupId, row.group.id))
       .orderBy(guests.name, guests.id),
     row.form ? groupResponses([row.group.id], row.form.id) : new Map<number, GroupResponse>(),
     listScheduleItems(row.group.eventId),
+    listMenus(row.group.eventId),
   ]);
   return {
     groupId: row.group.id,
     groupName: row.group.name,
     guests: members,
+    menus: eventMenus,
     form: row.form && { id: row.form.id, form: toForm(row.form) },
     schedule,
     response: responses.get(row.group.id) ?? null,
@@ -573,7 +579,7 @@ export async function getGroupInvitation(token: string): Promise<GroupInvitation
 export async function createGroupResponse(
   formId: number,
   groupId: number,
-  answers: { guestId: number; name: string; answer: boolean | null }[],
+  answers: { guestId: number; name: string; answer: boolean | null; menuId: number | null }[],
 ): Promise<GroupResponse | undefined> {
   const rows = await db.transaction(async (tx) => {
     await tx.select({ id: guestGroups.id }).from(guestGroups).where(eq(guestGroups.id, groupId)).for('update');
@@ -584,7 +590,7 @@ export async function createGroupResponse(
     if (already > 0) return undefined;
     return tx
       .insert(formResponses)
-      .values(answers.map((a) => ({ formId, groupId, guestId: a.guestId, name: a.name, answer: a.answer })))
+      .values(answers.map((a) => ({ formId, groupId, guestId: a.guestId, name: a.name, answer: a.answer, menuId: a.menuId })))
       .returning(responseColumns);
   });
   return rows && toGroupResponses(rows).get(groupId);

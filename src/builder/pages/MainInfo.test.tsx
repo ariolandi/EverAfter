@@ -1,10 +1,24 @@
 import { useState } from 'react';
 import { fireEvent, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { FormFields, InvitationDetails } from '../../../shared/types';
+import { api } from '../../api';
 import { renderWithTheme } from '../../test/render';
 import MainInfo from './MainInfo';
 import { todayIso } from '../../dates';
+
+const blankDetails: InvitationDetails = {
+    brideName: '',
+    groomName: '',
+    weddingDate: '',
+    place: '',
+    colors: ['#ffffff'],
+    primaryColor: 0,
+    secondaryColor: 0,
+    invitationText: '',
+    dressCode: 'cocktail',
+    colorUsage: 'informative',
+};
 
 /** Holds the details like Builder does and prints them so the test can read the result. */
 function Harness() {
@@ -17,6 +31,8 @@ function Harness() {
         primaryColor: 0,
         secondaryColor: 0,
         invitationText: '',
+        dressCode: 'cocktail',
+        colorUsage: 'informative',
     });
     const [fields, setFields] = useState<FormFields>({ showName: true, showAnswer: true });
     return (
@@ -82,6 +98,48 @@ describe('MainInfo', () => {
         expect(text).toHaveAttribute('maxLength', '2000');
         expect(text).not.toBeRequired();
     });
+
+    it('uploads a picture as the background and lets it be removed', async () => {
+        const uploadImage = vi
+            .spyOn(api, 'uploadImage')
+            .mockResolvedValue({ id: 7, prompt: 'a.png', createdAt: '', url: '/api/images/7/file' })
+        const onImageChange = vi.fn()
+        const { user } = renderWithTheme(
+            <MainInfo
+                details={blankDetails}
+                setDetails={vi.fn()}
+                fields={{ showName: true, showAnswer: true }}
+                setFields={vi.fn()}
+                image={null}
+                onImageChange={onImageChange}
+            />,
+        )
+        const file = new File(['x'], 'a.png', { type: 'image/png' })
+        await user.upload(screen.getByTestId('background-input'), file)
+        expect(uploadImage).toHaveBeenCalledWith(file)
+        expect(onImageChange).toHaveBeenCalledWith({ id: 7, url: '/api/images/7/file' })
+    })
+
+    it('refuses a file that is not a supported picture', async () => {
+        const uploadImage = vi.spyOn(api, 'uploadImage')
+        uploadImage.mockClear()
+        const { user } = renderWithTheme(
+            <MainInfo
+                details={blankDetails}
+                setDetails={vi.fn()}
+                fields={{ showName: true, showAnswer: true }}
+                setFields={vi.fn()}
+                onImageChange={vi.fn()}
+            />,
+        )
+        // applyAccept off: the hidden input's accept filter would otherwise drop the file before our check.
+        await user.setup({ applyAccept: false }).upload(
+            screen.getByTestId('background-input'),
+            new File(['x'], 'a.gif', { type: 'image/gif' }),
+        )
+        expect(screen.getByText(/JPEG, PNG или WebP/)).toBeInTheDocument()
+        expect(uploadImage).not.toHaveBeenCalled()
+    })
 
     it('marks every field as required', () => {
         renderWithTheme(<Harness />);

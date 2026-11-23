@@ -34,6 +34,8 @@ const body = {
   primaryColor: 2,
   secondaryColor: 0,
   invitationText: '',
+  dressCode: 'cocktail',
+  colorUsage: 'informative',
 };
 
 const app = appWith('/api/forms', formRouter);

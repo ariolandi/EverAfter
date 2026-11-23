@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 import { HttpStatus } from '../shared/httpStatus.js';
-import type { PublishedForm } from '../shared/types.js';
+import type { Menu, PublishedForm } from '../shared/types.js';
 import { createGroupResponse, getGroupInvitation, type GroupInvitationRecord } from './db.js';
 import { groupRouter } from './groups.js';
 import { appWith } from './test/app.js';
@@ -22,16 +22,34 @@ const form: PublishedForm = {
   primaryColor: 0,
   secondaryColor: 1,
   invitationText: '',
+  dressCode: 'cocktail',
+  colorUsage: 'informative',
 };
+
+const menu: Menu = {
+  id: 20,
+  name: 'Класическо меню',
+  isChild: false,
+  salad: 'Шопска салата',
+  appetizer: 'Пълнени чушки',
+  mainCourse: 'Свинско',
+  createdAt: '2026-11-01T10:00:00.000Z',
+};
+
+const schedule = [
+  { id: 30, title: 'Церемония', startTime: '15:00', place: 'Градината', createdAt: '2026-11-01T10:00:00.000Z' },
+];
 
 const record = (overrides: Partial<GroupInvitationRecord> = {}): GroupInvitationRecord => ({
   groupId: 10,
   groupName: 'Семейство Иванови',
   guests: [
-    { id: 1, name: 'Иван Иванов' },
-    { id: 2, name: 'Мария Иванова' },
+    { id: 1, name: 'Иван Иванов', isChild: false },
+    { id: 2, name: 'Мария Иванова', isChild: false },
   ],
+  menus: [],
   form: { id: 5, form },
+  schedule,
   response: null,
   ...overrides,
 });
@@ -39,8 +57,8 @@ const record = (overrides: Partial<GroupInvitationRecord> = {}): GroupInvitation
 const answered = {
   respondedAt: '2026-11-19T10:00:00.000Z',
   guests: [
-    { guestId: 1, name: 'Иван Иванов', answer: true },
-    { guestId: 2, name: 'Мария Иванова', answer: false },
+    { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null },
+    { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null },
   ],
 };
 
@@ -56,8 +74,10 @@ describe('GET /api/groups/:token', () => {
     expect(getGroupInvitation).toHaveBeenCalledWith('grp-token');
     expect(res.body).toEqual({
       form,
+      schedule,
       groupName: 'Семейство Иванови',
       guests: record().guests,
+      menus: [],
       response: null,
     });
   });
@@ -101,8 +121,8 @@ describe('POST /api/groups/:token/responses', () => {
     expect(res.status).toBe(HttpStatus.CREATED);
     expect(res.body).toEqual(answered);
     expect(createGroupResponse).toHaveBeenCalledWith(5, 10, [
-      { guestId: 1, name: 'Иван Иванов', answer: true },
-      { guestId: 2, name: 'Мария Иванова', answer: false },
+      { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null },
+      { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null },
     ]);
   });
 
@@ -113,8 +133,8 @@ describe('POST /api/groups/:token/responses', () => {
 
     expect(res.status).toBe(HttpStatus.CREATED);
     expect(createGroupResponse).toHaveBeenCalledWith(5, 10, [
-      { guestId: 1, name: 'Иван Иванов', answer: null },
-      { guestId: 2, name: 'Мария Иванова', answer: null },
+      { guestId: 1, name: 'Иван Иванов', answer: null, menuId: null },
+      { guestId: 2, name: 'Мария Иванова', answer: null, menuId: null },
     ]);
   });
 
@@ -180,6 +200,91 @@ describe('POST /api/groups/:token/responses', () => {
       ],
     });
     expect(res.status).toBe(HttpStatus.CONFLICT);
+  });
+
+  describe('menus', () => {
+    const adultMenu = { ...menu, id: 20, isChild: false };
+    const kidsMenu = { ...menu, id: 21, name: 'Детско меню', isChild: true };
+    const withMenus = () =>
+      vi.mocked(getGroupInvitation).mockResolvedValue(
+        record({
+          guests: [
+            { id: 1, name: 'Иван Иванов', isChild: false },
+            { id: 2, name: 'Ники Иванов', isChild: true },
+          ],
+          menus: [adultMenu, kidsMenu],
+        }),
+      );
+
+    it('records each attending guest’s menu', async () => {
+      withMenus();
+      vi.mocked(createGroupResponse).mockResolvedValue(answered);
+      const res = await post({
+        answers: [
+          { guestId: 1, answer: true, menuId: 20 },
+          { guestId: 2, answer: true, menuId: 21 },
+        ],
+      });
+      expect(res.status).toBe(HttpStatus.CREATED);
+      expect(createGroupResponse).toHaveBeenCalledWith(5, 10, [
+        { guestId: 1, name: 'Иван Иванов', answer: true, menuId: 20 },
+        { guestId: 2, name: 'Ники Иванов', answer: true, menuId: 21 },
+      ]);
+    });
+
+    it('lets a child pick an adults’ menu', async () => {
+      withMenus();
+      vi.mocked(createGroupResponse).mockResolvedValue(answered);
+      const res = await post({
+        answers: [
+          { guestId: 1, answer: true, menuId: 20 },
+          { guestId: 2, answer: true, menuId: 20 },
+        ],
+      });
+      expect(res.status).toBe(HttpStatus.CREATED);
+    });
+
+    it('refuses the children’s menu for an adult', async () => {
+      withMenus();
+      const res = await post({
+        answers: [
+          { guestId: 1, answer: true, menuId: 21 },
+          { guestId: 2, answer: true, menuId: 21 },
+        ],
+      });
+      expect(res.status).toBe(HttpStatus.BAD_REQUEST);
+      expect(createGroupResponse).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['no menu', undefined],
+      ['an unknown menu', 999],
+    ])('refuses an attending guest with %s', async (_label, menuId) => {
+      withMenus();
+      const res = await post({
+        answers: [
+          { guestId: 1, answer: true, menuId },
+          { guestId: 2, answer: true, menuId: 21 },
+        ],
+      });
+      expect(res.status).toBe(HttpStatus.BAD_REQUEST);
+    });
+
+    it('records no menu for a guest who does not come', async () => {
+      withMenus();
+      vi.mocked(createGroupResponse).mockResolvedValue(answered);
+      const res = await post({
+        answers: [
+          { guestId: 1, answer: false, menuId: 21 },
+          { guestId: 2, answer: true, menuId: 21 },
+        ],
+      });
+      expect(res.status).toBe(HttpStatus.CREATED);
+      expect(createGroupResponse).toHaveBeenCalledWith(5, 10, [
+        { guestId: 1, name: 'Иван Иванов', answer: false, menuId: null },
+        { guestId: 2, name: 'Ники Иванов', answer: true, menuId: 21 },
+      ]);
+    });
   });
 
   it('is 404 when there is no invitation to answer', async () => {

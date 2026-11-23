@@ -4,7 +4,7 @@ import AnswerIcon from './AnswerIcon';
 import { answerLabel } from './answers';
 
 interface GroupAnswerProps {
-    guests: { name: string; answer: boolean | null }[];
+    guests: { name: string; answer: boolean | null; menu?: string | null }[];
 }
 
 /** Each guest's answer, as sent or about to be sent. */
@@ -22,7 +22,7 @@ export default function GroupAnswer({ guests }: GroupAnswerProps) {
                     </ListItemIcon>
                     <ListItemText
                         primary={guest.name}
-                        secondary={guest.answer === null ? undefined : answerLabel(guest.answer)}
+                        secondary={[guest.answer === null ? null : answerLabel(guest.answer), guest.menu].filter(Boolean).join(' · ') || undefined}
                     />
                 </ListItem>
             ))}

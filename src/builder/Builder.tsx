@@ -1,20 +1,35 @@
 import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Divider, Snackbar, Stack, Step, StepButton, Stepper, Typography } from '@mui/material';
-import type { InvitationColors, InvitationDetails, FormFields, Guest, GuestGroup } from '../../shared/types';
+import type {
+    InvitationColors,
+    InvitationDetails,
+    FormFields,
+    Guest,
+    GuestGroup,
+    Menu,
+    ScheduleItem,
+} from '../../shared/types';
 import { api } from '../api';
 import BackButton from '../components/BackButton';
 import { errorMessage } from '../errors';
 import { loadEvent } from '../events/loadEvent';
-import GroupRsvpForm from '../form/GroupRsvpForm';
+import MenuChoice from '../form/MenuChoice';
+import RsvpForm from '../form/RsvpForm';
 import { guestsOf } from '../form/guestNames';
 import InvitationForm from '../form/InvitationForm';
 import GroupSelect from './GroupSelect';
-import GuestsPreview from './pages/GuestsPreview';
 import MainInfo from './pages/MainInfo';
+import ScheduleInfo from './pages/ScheduleInfo';
 import { isPastDate } from '../dates';
 import { palette as appPalette } from '../theme/palette';
 
-const STEPS = ['Основна информация', 'Гости'];
+/** The builder's steps; each previews the invitation page at the same position. The menus step exists only when the event has menus. */
+const stepsFor = (hasMenus: boolean) => [
+    'Основна информация',
+    'Програма и дрескод',
+    ...(hasMenus ? ['Менюта'] : []),
+    'Гости',
+];
 
 /** A new invitation starts in the app's own colours: ink for the text, with a gold accent. */
 const DEFAULT_COLORS: InvitationColors = {
@@ -34,6 +49,8 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
     const [error, setError] = useState<string | null>(null);
     const [guests, setGuests] = useState<Guest[]>([]);
     const [groups, setGroups] = useState<GuestGroup[]>([]);
+    const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
+    const [menus, setMenus] = useState<Menu[]>([]);
     // The group whose personal invitation the preview shows on the guests step.
     const [previewGroupId, setPreviewGroupId] = useState<number | null>(null);
     const [previewGuestId, setPreviewGuestId] = useState<number | null>(null);
@@ -45,13 +62,15 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
         place: '',
         ...DEFAULT_COLORS,
         invitationText: '',
+        dressCode: 'cocktail',
+        colorUsage: 'informative',
     });
     const [loaded, setLoaded] = useState(false);
     // Slug of the event's saved invitation; null until it is first saved.
     const [slug, setSlug] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [savedNotice, setSavedNotice] = useState(false);
-    // The saved invitation's image, kept as it is on every save.
+    // The invitation's background picture: uploaded in the main info step, then saved with the invitation.
     const [savedImage, setSavedImage] = useState<{ id: number; url: string } | null>(null);
     const imageId = savedImage?.id ?? null;
     const imageUrl = savedImage?.url ?? null;
@@ -102,12 +121,31 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                         primaryColor: invitation.primaryColor,
                         secondaryColor: invitation.secondaryColor,
                         invitationText: invitation.invitationText,
+                        dressCode: invitation.dressCode,
+                        colorUsage: invitation.colorUsage,
                     });
                 }
                 setLoaded(true);
             })
             .catch((e) => setError(errorMessage(e)));
     }, [eventId]);
+
+    useEffect(() => {
+        api.listSchedule(eventId)
+            .then(setSchedule)
+            .catch((e) => setError(errorMessage(e)));
+    }, [eventId]);
+
+    useEffect(() => {
+        api.listMenus(eventId)
+            .then(setMenus)
+            .catch((e) => setError(errorMessage(e)));
+    }, [eventId]);
+
+    const STEPS = stepsFor(menus.length > 0);
+    // The guests step previews the menu-picking page, or the answer page when there are no menus; it is the last step.
+    const GUESTS_STEP = STEPS.length - 1;
+    const MENUS_STEP = menus.length > 0 ? 2 : -1;
 
     const detailsComplete = Boolean(
         details.brideName.trim() &&
@@ -124,8 +162,8 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
         (guest) => guest.id === previewGuestId && !groups.some((group) => group.guestIds.includes(guest.id)),
     );
     const selectedGuests = soloGuest ? [soloGuest] : selectedGroup ? guestsOf(selectedGroup, guests) : [];
-    const previewGroup = activeStep === 1 ? selectedGroup : undefined;
-    const previewGuests = previewGroup ? selectedGuests : [];
+    // A guest invited on their own is answered for like a group of one: by name, not by typing it in.
+    const previewing = activeStep === GUESTS_STEP && (soloGuest || selectedGroup);
 
     if (!loaded) return error ? <Alert severity="error">{error}</Alert> : null;
 
@@ -157,6 +195,8 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                             setDetails={setDetails}
                             fields={fields}
                             setFields={setFields}
+                            image={savedImage}
+                            onImageChange={setSavedImage}
                         />
                         <GroupSelect
                             groups={groups}
@@ -175,16 +215,13 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                     </>
                 )}
 
-                {activeStep === 1 && (
-                    <GuestsPreview
-                        groups={groups}
-                        guests={guests}
-                        selectedId={previewGroupId}
-                        onSelect={(id) => {
-                            setPreviewGuestId(null);
-                            setPreviewGroupId(id);
-                        }}
-                    />
+                {activeStep === 1 && <ScheduleInfo details={details} setDetails={setDetails} schedule={schedule} />}
+
+                {activeStep === MENUS_STEP && (
+                    <Typography color="text.secondary">
+                        Менюта на събитието се показват на отделна страница в поканата. Добавяйте и променяйте менютата от
+                        страницата на събитието.
+                    </Typography>
                 )}
 
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
@@ -256,11 +293,15 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                         details={details}
                         imageUrl={imageUrl}
                         page={activeStep}
+                        schedule={schedule}
                         guestNames={selectedGuests.map((guest) => guest.name)}
-                        onPageChange={setActiveStep}
+                        menus={menus}
+                        // The answer page follows the menu-picking page but shares its step.
+                        onPageChange={(page) => setActiveStep(Math.min(page, GUESTS_STEP))}
+                        menuSelection={previewing && menus.length > 0 && <MenuChoice guests={selectedGuests} menus={menus} choices={{}} />}
                         responseForm={
-                            previewGroup && (
-                                <GroupRsvpForm fields={fields} guests={previewGuests} response={null} />
+                            previewing && (
+                                <RsvpForm fields={fields} guests={selectedGuests} response={null} />
                             )
                         }
                     />

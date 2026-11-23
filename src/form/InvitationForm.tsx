@@ -1,12 +1,17 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Box, Divider, IconButton, Stack, Typography } from '@mui/material';
+import { Box, IconButton, Stack, Typography } from '@mui/material';
 import KeyboardArrowDown from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUp from '@mui/icons-material/KeyboardArrowUp';
-import type { InvitationDetails, FormFields, FormResponseInput } from '../../shared/types';
+import type { InvitationDetails, FormFields, FormResponseInput, Menu, ScheduleItem } from '../../shared/types';
 import { isoToLongDate } from '../dates';
 import { scriptFont } from '../theme/typography';
+import { palette } from '../theme/palette';
 import { joinGuestNames } from './guestNames';
 import RsvpForm from './RsvpForm';
+import MenusPage from './MenusPage';
+import ScheduleDressCode from './ScheduleDressCode';
+import { GoldRule } from '../components/goldRule';
+import { Subtitle } from '../components/subtitle';
 
 interface Props {
     fields: FormFields;
@@ -22,6 +27,12 @@ interface Props {
     onPageChange?: (page: number) => void;
     /** Names of the guests the invitation is addressed to; omit (or leave empty) to greet the guests in general. */
     guestNames?: string[];
+    /** The event's schedule, shown on the second page; omit (or leave empty) to show only the dress code. */
+    schedule?: ScheduleItem[];
+    /** The event's menus, shown on a page of their own; omit (or leave empty) to skip that page. */
+    menus?: Menu[];
+    /** Page where guests pick their menus, between the menus and the answer; omit to skip it. */
+    menuSelection?: ReactNode;
 }
 
 interface PageProps {
@@ -43,9 +54,12 @@ const arrowSx = {
     '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.95)', color: 'primary.dark' },
 } as const;
 
+/** Opacity of the plaque's white fill, from 0 (clear) to 1 (solid); lower lets the background show through. */
+const PLAQUE_OPACITY = 0.75;
+
 /** Radius of the plaque's inward-arched corners, and the width of its gold edge. */
 const CORNER_RADIUS = 28;
-const EDGE = 2;
+const EDGE = 4;
 
 /**
  * Mask that cuts a quarter circle out of each corner, centred on the corner itself.
@@ -64,7 +78,20 @@ const concaveCornersMask = (radius: number, offset = 0) => {
     ].join(', ');
 };
 
-/** Tall gold-edged plaque with corners arched inwards; a white layer inset by the edge shows the gold as a border. */
+/** Gold arcs hugging the cut-out corners, so the border runs unbroken round them. */
+const goldCornerRings = (radius: number) => {
+    const gold = palette.primary.main;
+    const ring = (at: string, position: string) =>
+        `radial-gradient(circle at ${at}, transparent ${radius}px, ${gold} ${radius}px, ${gold} ${radius + EDGE}px, transparent ${radius + EDGE}px) ${position} / 51% 51% no-repeat border-box`;
+    return [
+        ring('0 0', 'top left'),
+        ring('100% 0', 'top right'),
+        ring('0 100%', 'bottom left'),
+        ring('100% 100%', 'bottom right'),
+    ].join(', ');
+};
+
+/** Tall gold-edged plaque with corners arched inwards. */
 const plaqueSx = {
     position: 'relative',
     // Taller than its content, but not the whole page; long text scrolls inside.
@@ -77,34 +104,16 @@ const plaqueSx = {
     py: 5,
     overflowY: 'auto',
     scrollbarWidth: 'none',
-    bgcolor: 'primary.main',
+    // Straight sides are the border; the arched corners get their gold from background rings, since a border can't follow an arc.
+    border: `solid ${EDGE}px`,
+    borderColor: 'primary.main',
+    background: `${goldCornerRings(CORNER_RADIUS)}, rgba(255, 255, 255, ${PLAQUE_OPACITY})`,
     mask: concaveCornersMask(CORNER_RADIUS),
-    '&::before': {
-        content: '""',
-        position: 'absolute',
-        inset: EDGE,
-        bgcolor: 'rgba(255, 255, 255, 0.95)',
-        mask: concaveCornersMask(CORNER_RADIUS + EDGE, EDGE),
-    },
-    // Content sits above the white layer.
+    // Content sits above the fill.
     '& > *': { position: 'relative' },
     // The answer forms are cards of their own; inside the plaque they blend in.
     '& .MuiPaper-root': { p: 0, bgcolor: 'transparent', boxShadow: 'none', border: 0 },
 } as const;
-
-/** A line of the cover page's text, under the greeting. */
-function Subtitle({ children, italic }: { children: ReactNode; italic?: boolean }) {
-    return (
-        <Typography variant="subtitle1" align="center" color="inherit" sx={italic ? { fontStyle: 'italic' } : undefined}>
-            {children}
-        </Typography>
-    );
-}
-
-/** A thin gold rule that sets off a part of the cover text. */
-function GoldRule() {
-    return <Divider aria-hidden sx={{ width: '40%', my: 1, borderColor: 'primary.main' }} />;
-}
 
 function InvitationPage({ children, imageUrl, onNext, onPrev }: PageProps) {
     return (
@@ -130,14 +139,14 @@ function InvitationPage({ children, imageUrl, onNext, onPrev }: PageProps) {
             {onPrev && (
                 // Set below the top edge so the builder's phone notch doesn't cover it.
                 <IconButton aria-label="Към предишната страница" onClick={onPrev} sx={{ ...arrowSx, top: 36 }}>
-                    <KeyboardArrowUp />
+                    <KeyboardArrowUp fontSize="large" />
                 </IconButton>
             )}
             {/* Every page shows its content on the same plaque. */}
             <Box sx={plaqueSx}>{children}</Box>
             {onNext && (
                 <IconButton aria-label="Към следващата страница" onClick={onNext} sx={{ ...arrowSx, bottom: 8 }}>
-                    <KeyboardArrowDown />
+                    <KeyboardArrowDown fontSize="large" />
                 </IconButton>
             )}
         </Box>
@@ -153,6 +162,9 @@ export default function InvitationForm({
     page,
     onPageChange,
     guestNames = [],
+    schedule = [],
+    menus = [],
+    menuSelection,
 }: Props) {
     const coupleTitle = [details.brideName, details.groomName]
         .map((n) => n.trim())
@@ -188,22 +200,22 @@ export default function InvitationForm({
         if (el && onPageChange) onPageChange(Math.round(el.scrollTop / el.clientHeight));
     };
 
-    return (
+    const tinted = (content: ReactNode) => (
         <Box
-            ref={scrollRef}
-            onScrollEnd={reportScrolledPage}
             sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                overflowY: 'auto',
-                scrollSnapType: 'y mandatory',
-                scrollbarWidth: 'none',
-                '&::-webkit-scrollbar': { display: 'none' },
+                color: textColor,
+                '& .MuiTypography-root': { color: 'inherit' },
+                '& .MuiTypography-root.guest-name': { color: nameColor },
+                '& .MuiFormLabel-root:not(.Mui-focused)': { color: textColor },
             }}
         >
-            <InvitationPage onNext={() => goToPage(1)}>
-                <Stack spacing={0.5} sx={{ alignItems: 'center', color: textColor }}>
+            {content}
+        </Box>
+    );
+
+    // The pages in reading order; the optional ones appear only when they have something to show.
+    const pages: ReactNode[] = [
+        <Stack spacing={0.5} sx={{ alignItems: 'center', color: textColor }}>
                     <Subtitle italic>
                             Скъпи
                     </Subtitle>
@@ -223,22 +235,39 @@ export default function InvitationForm({
                     <Typography variant="metallic" component="h5" align="center" sx={{ fontWeight: 600, fontSize: '1.5rem' }}>
                         {coupleTitle}
                     </Typography>
-                </Stack>
-            </InvitationPage>
+                </Stack>,
+        // The schedule page keeps the cover's colours too.
+        <ScheduleDressCode details={details} schedule={schedule} textColor={textColor} accentColor={nameColor} />,
+        ...(menus.length > 0 ? [<MenusPage menus={menus} textColor={textColor} accentColor={nameColor} />] : []),
+        ...(menuSelection ? [tinted(menuSelection)] : []),
+        // The answer page keeps the cover's colours: text in the primary, guests' names in the secondary.
+        tinted(responseForm ?? <RsvpForm fields={fields} onSubmit={onSubmit} />),
+    ];
 
-            <InvitationPage imageUrl={imageUrl} onPrev={() => goToPage(0)}>
-                {/* The answer page keeps the cover's colours: text in the primary, guests' names in the secondary. */}
-                <Box
-                    sx={{
-                        color: textColor,
-                        '& .MuiTypography-root': { color: 'inherit' },
-                        '& .MuiTypography-root.guest-name': { color: nameColor },
-                        '& .MuiFormLabel-root:not(.Mui-focused)': { color: textColor },
-                    }}
+    return (
+        <Box
+            ref={scrollRef}
+            onScrollEnd={reportScrolledPage}
+            sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                overflowY: 'auto',
+                scrollSnapType: 'y mandatory',
+                scrollbarWidth: 'none',
+                '&::-webkit-scrollbar': { display: 'none' },
+            }}
+        >
+            {pages.map((content, index) => (
+                <InvitationPage
+                    key={index}
+                    imageUrl={imageUrl}
+                    onPrev={index > 0 ? () => goToPage(index - 1) : undefined}
+                    onNext={index < pages.length - 1 ? () => goToPage(index + 1) : undefined}
                 >
-                    {responseForm ?? <RsvpForm fields={fields} onSubmit={onSubmit} />}
-                </Box>
-            </InvitationPage>
+                    {content}
+                </InvitationPage>
+            ))}
         </Box>
     );
 }

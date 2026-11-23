@@ -1,5 +1,6 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { HttpStatus } from '../shared/httpStatus.js';
+import { MAX_UPLOAD_BYTES } from '../shared/types.js';
 import { requireUser } from './auth.js';
 import { createImage, deleteImage, getImageFile, listImages } from './db.js';
 
@@ -25,6 +26,28 @@ imageRouter.use(requireUser);
 
 imageRouter.get('/', async (req, res) => {
   res.json(await listImages(req.user!.id));
+});
+
+/** The image formats a user may upload, recognised by their leading bytes rather than the client's claim. */
+function detectImageType(data: Buffer): string | undefined {
+  if (data.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return 'image/jpeg';
+  if (data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (data.subarray(0, 4).toString('latin1') === 'RIFF' && data.subarray(8, 12).toString('latin1') === 'WEBP') {
+    return 'image/webp';
+  }
+  return undefined;
+}
+
+// The picture arrives as the raw request body; the optional ?name= is its original file name.
+imageRouter.post('/upload', express.raw({ type: 'image/*', limit: MAX_UPLOAD_BYTES }), async (req, res) => {
+  const data: unknown = req.body;
+  const mimeType = Buffer.isBuffer(data) ? detectImageType(data) : undefined;
+  if (!Buffer.isBuffer(data) || !mimeType) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: 'upload a JPEG, PNG or WebP picture' });
+    return;
+  }
+  const name = typeof req.query.name === 'string' ? req.query.name.trim().slice(0, MAX_PROMPT_LENGTH) : '';
+  res.status(HttpStatus.CREATED).json(await createImage(req.user!.id, name || 'Uploaded picture', mimeType, data));
 });
 
 imageRouter.post('/', async (req, res) => {

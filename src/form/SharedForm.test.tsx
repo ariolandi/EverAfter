@@ -9,7 +9,7 @@ vi.mock('../api');
 
 describe('SharedForm', () => {
     it('loads the invitation by slug', async () => {
-        vi.mocked(api.getForm).mockResolvedValue(publishedForm());
+        vi.mocked(api.getForm).mockResolvedValue({ ...publishedForm(), schedule: [], menus: [] });
         renderWithTheme(<SharedForm slug="abc123" />);
 
         expect(await screen.findByText('Мария & Иван')).toBeInTheDocument();
@@ -18,7 +18,7 @@ describe('SharedForm', () => {
     });
 
     it('confirms and sends the answer for the slug, then thanks the guest', async () => {
-        vi.mocked(api.getForm).mockResolvedValue(publishedForm());
+        vi.mocked(api.getForm).mockResolvedValue({ ...publishedForm(), schedule: [], menus: [] });
         vi.mocked(api.submitFormResponse).mockResolvedValue(undefined);
         const { user } = renderWithTheme(<SharedForm slug="abc123" />);
 

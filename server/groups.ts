@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { HttpStatus } from '../shared/httpStatus.js';
-import type { GroupInvitation } from '../shared/types.js';
+import { menusForGuest, type GroupInvitation } from '../shared/types.js';
 import { createGroupResponse, getGroupInvitation } from './db.js';
 
 /** Public routes behind a group's personal invitation link: anyone with the token can view and answer once. */
@@ -21,6 +21,7 @@ groupRouter.get('/:token', async (req, res) => {
     schedule: found.schedule,
     groupName: found.groupName,
     guests: found.guests,
+    menus: found.menus,
     response: found.response,
   };
   res.json(invitation);
@@ -57,13 +58,30 @@ groupRouter.post('/:token/responses', async (req, res) => {
     res.status(HttpStatus.BAD_REQUEST).json({ error: 'please answer yes or no for every guest' });
     return;
   }
+  const menuByGuest = new Map<unknown, unknown>(answers.map((a) => [a?.guestId, a?.menuId]));
+  const picks: (number | null)[] = [];
+  for (const guest of found.guests) {
+    const attending = !form.showAnswer || byGuest.get(guest.id) === true;
+    const options = menusForGuest(found.menus, guest.isChild);
+    const menuId = menuByGuest.get(guest.id);
+    // Only guests who come choose a menu, and only from the ones meant for them: children's menus are for children.
+    if (!attending || options.length === 0) {
+      picks.push(null);
+    } else if (options.some((menu) => menu.id === menuId)) {
+      picks.push(menuId as number);
+    } else {
+      res.status(HttpStatus.BAD_REQUEST).json({ error: `pick a menu for ${guest.name}` });
+      return;
+    }
+  }
   const response = await createGroupResponse(
     found.form.id,
     found.groupId,
-    found.guests.map((g) => ({
+    found.guests.map((g, i) => ({
       guestId: g.id,
       name: g.name,
       answer: form.showAnswer ? (byGuest.get(g.id) as boolean) : null,
+      menuId: picks[i],
     })),
   );
   if (!response) {

@@ -1,0 +1,2 @@
+ALTER TABLE "form_responses" ADD COLUMN "menu_id" integer;--> statement-breakpoint
+ALTER TABLE "form_responses" ADD CONSTRAINT "form_responses_menu_id_menus_id_fk" FOREIGN KEY ("menu_id") REFERENCES "public"."menus"("id") ON DELETE set null ON UPDATE no action;

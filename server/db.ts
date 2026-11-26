@@ -71,8 +71,7 @@ const toForm = (row: typeof forms.$inferSelect): PublishedForm => ({
   imageId: row.imageId,
   showName: row.showName,
   showAnswer: row.showAnswer,
-  brideName: row.brideName,
-  groomName: row.groomName,
+  organizers: row.organizers,
   weddingDate: row.weddingDate,
   place: row.place,
   colors: row.colors,
@@ -566,10 +565,18 @@ export async function deleteGroup(eventId: number, id: number): Promise<boolean>
   return deleted.length > 0;
 }
 
+/** The name of an event, for its public invitation; '' if the event is gone. */
+export async function getEventName(eventId: number): Promise<string> {
+  const [row] = await db.select({ name: events.name }).from(events).where(eq(events.id, eventId));
+  return row?.name ?? '';
+}
+
 /** Everything a personal link needs: the invitation, who it is for, and what they have answered. */
 export interface InvitationRecord {
   /** The group the link belongs to; null on a guest's own link. */
   groupId: number | null;
+  /** The event's name, shown as the invitation's heading. */
+  eventName: string;
   /** The group's name, or the guest's own name on their own link. */
   name: string;
   guests: InvitedGuest[];
@@ -589,16 +596,18 @@ async function invitationRecord(
   members: InviteeGuest[],
   formRow: typeof forms.$inferSelect | null,
 ): Promise<InvitationRecord> {
-  const [responses, schedule, eventMenus] = await Promise.all([
+  const [responses, schedule, eventMenus, eventName] = await Promise.all([
     responsesOfGuests(
       members.map((m) => m.id),
       formRow?.id,
     ),
     listScheduleItems(eventId),
     listMenus(eventId),
+    getEventName(eventId),
   ]);
   return {
     groupId,
+    eventName,
     name,
     guests: members.map((m) => {
       const row = responses.get(m.id);
@@ -714,6 +723,7 @@ export async function listResponses(eventId: number): Promise<ResponseEntry[]> {
     const row = responses.get(guest.id);
     return {
       guestId: guest.id,
+      generalResponseId: null,
       name: guest.name,
       groupName: groupRows.find((g) => g.id === guest.groupId)?.name ?? null,
       response: row ? toGuestResponse(row) : null,
@@ -721,7 +731,7 @@ export async function listResponses(eventId: number): Promise<ResponseEntry[]> {
   });
   if (formId === undefined) return entries;
   const general = await db
-    .select(responseColumns)
+    .select({ id: formResponses.id, ...responseColumns })
     .from(formResponses)
     .where(and(eq(formResponses.formId, formId), isNull(formResponses.guestId), isNull(formResponses.groupId)))
     .orderBy(asc(formResponses.id));
@@ -729,6 +739,7 @@ export async function listResponses(eventId: number): Promise<ResponseEntry[]> {
     ...entries,
     ...general.map((row) => ({
       guestId: null,
+      generalResponseId: row.id,
       name: row.name ?? '',
       groupName: null,
       response: toGuestResponse(row),
@@ -789,8 +800,36 @@ export async function getFormImage(slug: string): Promise<{ mimeType: string; da
   return row;
 }
 
-export async function createFormResponse(formId: number, name: string | null, answer: boolean | null): Promise<void> {
-  await db.insert(formResponses).values({ formId, name, answer });
+export async function createFormResponse(
+  formId: number,
+  name: string | null,
+  values: Omit<GuestAnswerRow, 'guestId' | 'name'>,
+): Promise<void> {
+  await db.insert(formResponses).values({ formId, name, ...values });
+}
+
+/** Corrects an answer sent from the general link. Resolves to false if the event has no such answer. */
+export async function updateGeneralResponse(
+  eventId: number,
+  responseId: number,
+  name: string | null,
+  values: Omit<GuestAnswerRow, 'guestId' | 'name'>,
+): Promise<boolean> {
+  const formId = await formIdOfEvent(eventId);
+  if (formId === undefined) return false;
+  const updated = await db
+    .update(formResponses)
+    .set({ name, ...values })
+    .where(
+      and(
+        eq(formResponses.id, responseId),
+        eq(formResponses.formId, formId),
+        isNull(formResponses.guestId),
+        isNull(formResponses.groupId),
+      ),
+    )
+    .returning({ id: formResponses.id });
+  return updated.length > 0;
 }
 
 /** In the order the parts take place. */

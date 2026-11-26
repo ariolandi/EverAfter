@@ -99,6 +99,13 @@
       "when": 1795708811267,
       "tag": "0013_room_with",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795709411267,
+      "tag": "0014_organizers",
+      "breakpoints": true
     }
   ]
 }

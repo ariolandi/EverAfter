@@ -7,6 +7,7 @@ import { parseGuestAnswer } from './responses.js';
 function toInvitation(found: InvitationRecord): GroupInvitation {
   return {
     form: found.form!.form,
+    eventName: found.eventName,
     schedule: found.schedule,
     groupName: found.name,
     guests: found.guests,

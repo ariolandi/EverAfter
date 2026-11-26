@@ -116,6 +116,7 @@ export default function GroupInvite({ token, kind = 'group' }: { token: string; 
     <PublicInvitationPage error={error}>
       <InvitationForm
         fields={invitation.form}
+        eventName={invitation.eventName}
         details={invitation.form}
         imageUrl={invitation.form.imageUrl}
         schedule={invitation.schedule}
@@ -123,6 +124,7 @@ export default function GroupInvite({ token, kind = 'group' }: { token: string; 
         guestPages={guestPages}
         guestNames={invitation.guests.map((guest) => guest.name)}
         responseForm={rsvp('attendance')}
+        envelope
       />
     </PublicInvitationPage>
   );

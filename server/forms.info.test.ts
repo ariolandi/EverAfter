@@ -2,13 +2,14 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpStatus } from '../shared/httpStatus.js';
 import type { EventInfo, PublishedForm } from '../shared/types.js';
-import { createForm, getEvent, getForm, listMenus, listScheduleItems } from './db.js';
+import { createForm, getEvent, getEventName, getForm, listMenus, listScheduleItems } from './db.js';
 import { formRouter } from './forms.js';
 import { appWith } from './test/app.js';
 
 vi.mock('./db.js', () => ({
   createForm: vi.fn(),
   getEvent: vi.fn(),
+  getEventName: vi.fn(),
   getForm: vi.fn(),
   listMenus: vi.fn(),
   listScheduleItems: vi.fn(),
@@ -29,8 +30,7 @@ const body = {
   imageId: null,
   showName: true,
   showAnswer: true,
-  brideName: 'Мария',
-  groomName: 'Иван',
+  organizers: ['Мария', 'Иван'],
   weddingDate: '2027-06-12',
   place: 'Пловдив',
   colors: ['#111111', '#222222'],
@@ -49,8 +49,7 @@ const form: PublishedForm = {
   imageUrl: null,
   showName: true,
   showAnswer: true,
-  brideName: 'Мария',
-  groomName: 'Иван',
+  organizers: ['Мария', 'Иван'],
   weddingDate: '2027-06-12',
   place: 'Пловдив',
   colors: ['#111111', '#222222'],
@@ -102,6 +101,7 @@ describe('GET /api/forms/:slug', () => {
       { id: 30, title: 'Церемония', startTime: '15:00', place: 'Градината', createdAt: '2026-11-01T10:00:00.000Z' },
     ];
     vi.mocked(getForm).mockResolvedValue({ id: 5, eventId: 1, form });
+    vi.mocked(getEventName).mockResolvedValue('Сватба');
     vi.mocked(listScheduleItems).mockResolvedValue(schedule);
     const menus = [
       {
@@ -118,6 +118,6 @@ describe('GET /api/forms/:slug', () => {
     const res = await request(app).get('/api/forms/abc123');
     expect(res.status).toBe(HttpStatus.OK);
     expect(listScheduleItems).toHaveBeenCalledWith(1);
-    expect(res.body).toEqual({ ...form, schedule, menus });
+    expect(res.body).toEqual({ ...form, eventName: 'Сватба', schedule, menus });
   });
 });

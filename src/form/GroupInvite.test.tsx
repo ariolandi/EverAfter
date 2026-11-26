@@ -26,6 +26,7 @@ const recorded = (overrides: Partial<GuestResponse> = {}): GuestResponse => ({
 
 const invitation = (overrides: Partial<GroupInvitation> = {}): GroupInvitation => ({
   form: publishedForm(),
+  eventName: 'Сватба',
   schedule: [],
   groupName: 'Семейство Иванови',
   guests: [guest(1, 'Иван Иванов'), guest(2, 'Мария Иванова')],

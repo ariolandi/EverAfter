@@ -39,6 +39,7 @@ import {
   listScheduleItems,
   normalizeEmail,
   saveGuestResponse,
+  updateGeneralResponse,
   setGuestIsChild,
   updateGroup,
   updateMenu,
@@ -203,6 +204,38 @@ eventRouter.put('/:id/guests/:guestId/response', async (req, res) => {
     return;
   }
   await saveGuestResponse(event.id, guest.id, parsed.values);
+  res.status(HttpStatus.NO_CONTENT).end();
+});
+
+// Organizers can correct an answer that came from the general link; it must be as complete as one the guest sends.
+eventRouter.put('/:id/responses/:responseId', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const form = event.invitation;
+  const responseId = Number(req.params.responseId);
+  if (!form || !Number.isInteger(responseId)) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'response not found' });
+    return;
+  }
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  if (form.showName && (!name || name.length > MAX_NAME_LENGTH)) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: `name must be 1-${MAX_NAME_LENGTH} characters` });
+    return;
+  }
+  const parsed = parseGuestAnswer(
+    { name: form.showName ? name : 'guest', isChild: false },
+    { showAnswer: form.showAnswer, menus: await listMenus(event.id) },
+    req.body ?? {},
+  );
+  if (!parsed.ok) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: parsed.error });
+    return;
+  }
+  const saved = await updateGeneralResponse(event.id, responseId, form.showName ? name : null, parsed.values);
+  if (!saved) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'response not found' });
+    return;
+  }
   res.status(HttpStatus.NO_CONTENT).end();
 });
 

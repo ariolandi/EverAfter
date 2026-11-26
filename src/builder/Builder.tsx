@@ -84,9 +84,9 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
   const [previewGroupId, setPreviewGroupId] = useState<number | null>(null);
   const [previewGuestId, setPreviewGuestId] = useState<number | null>(null);
   const [fields, setFields] = useState<FormFields>({ showName: true, showAnswer: true });
+  const [eventName, setEventName] = useState('');
   const [details, setDetails] = useState<InvitationDetails>({
-    brideName: '',
-    groomName: '',
+    organizers: [''],
     weddingDate: '',
     place: '',
     ...DEFAULT_COLORS,
@@ -136,6 +136,7 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
         setGuests(loadedGuests);
         setGroups(loadedGroups);
         setPreviewGroupId(loadedGroups[0]?.id ?? null);
+        setEventName(event.name);
         const { invitation } = event;
         if (invitation) {
           setSlug(invitation.slug);
@@ -144,8 +145,7 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
           }
           setFields({ showName: invitation.showName, showAnswer: invitation.showAnswer });
           setDetails({
-            brideName: invitation.brideName,
-            groomName: invitation.groomName,
+            organizers: invitation.organizers,
             weddingDate: invitation.weddingDate,
             place: invitation.place,
             colors: invitation.colors,
@@ -182,8 +182,8 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
   const hasMenus = menus.length > 0;
 
   const detailsComplete = Boolean(
-    details.brideName.trim() &&
-    details.groomName.trim() &&
+    details.organizers.length > 0 &&
+    details.organizers.every((name) => name.trim()) &&
     details.weddingDate &&
     !isPastDate(details.weddingDate) &&
     details.place.trim() &&
@@ -210,11 +210,11 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
         height: { md: '100%' },
       }}
     >
-      <Stack spacing={3} sx={{ minWidth: 0, overflowY: { md: 'auto' } }}>
+      <Stack spacing={3} sx={{ minWidth: 0, overflowY: { md: 'auto' }, overflowX: 'hidden' }}>
         <BackButton onClick={onBack}>Към събитието</BackButton>
         <Typography variant="h4">{slug ? 'Редактирай поканата' : 'Създай своята покана'}</Typography>
 
-        <Stepper nonLinear activeStep={activeStep}>
+        <Stepper nonLinear activeStep={activeStep} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
           {STEPS.map((label, index) => (
             <Step key={label}>
               <StepButton onClick={() => setActiveStep(index)}>{label}</StepButton>
@@ -358,6 +358,7 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
           />
           <InvitationForm
             fields={fields}
+            eventName={eventName}
             details={details}
             imageUrl={imageUrl}
             page={activeStep}

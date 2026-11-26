@@ -40,7 +40,7 @@ export default function CoownersPanel({ event }: CoownersPanelProps) {
         });
 
     return (
-        <Panel title="Съорганизатори">
+        <Panel title="Съорганизатори" collapsible>
             {event.isOwner ? (
                 <>
                     <MutedText>

@@ -18,8 +18,7 @@ const form: PublishedForm = {
   imageUrl: null,
   showName: true,
   showAnswer: true,
-  brideName: 'Мария',
-  groomName: 'Иван',
+  organizers: ['Мария', 'Иван'],
   weddingDate: '2027-06-12',
   place: 'Пловдив',
   colors: ['#6b6254', '#c9a227'],
@@ -63,6 +62,7 @@ const guest = (id: number, name: string, isChild = false, response: GuestRespons
 
 const record = (overrides: Partial<InvitationRecord> = {}): InvitationRecord => ({
   groupId: 10,
+  eventName: 'Сватба',
   name: 'Семейство Иванови',
   guests: [guest(1, 'Иван Иванов'), guest(2, 'Мария Иванова')],
   menus: [],
@@ -88,6 +88,7 @@ describe('GET /api/groups/:token', () => {
     expect(getGroupInvitation).toHaveBeenCalledWith('grp-token');
     expect(res.body).toEqual({
       form,
+      eventName: 'Сватба',
       schedule,
       groupName: 'Семейство Иванови',
       guests: record().guests,

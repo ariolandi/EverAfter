@@ -47,6 +47,7 @@ export default function SchedulePanel({ eventId }: SchedulePanelProps) {
 
     return (
         <Panel
+            collapsible
             title={`Програма (${items.length})`}
             action={
                 <Button variant="contained" startIcon={<Add />} onClick={() => setEditing('new')}>

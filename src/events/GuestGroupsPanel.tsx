@@ -50,6 +50,7 @@ export default function GuestGroupsPanel({ eventId, guests, groups, onGroupsChan
 
     return (
         <Panel
+            collapsible
             title={`Групи (${groups.length})`}
             action={
                 <Button

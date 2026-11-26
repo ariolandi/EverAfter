@@ -21,8 +21,7 @@ const form: PublishedForm = {
   imageUrl: null,
   showName: true,
   showAnswer: true,
-  brideName: 'Мария',
-  groomName: 'Иван',
+  organizers: ['Мария', 'Иван'],
   weddingDate: '2027-06-12',
   place: 'Пловдив',
   colors: ['#6b6254', '#c9a227'],
@@ -78,8 +77,8 @@ beforeEach(() => {
 describe('GET /api/events/:id/responses', () => {
   it('lists every guest’s answer for the organizers', async () => {
     const entries = [
-      { guestId: 1, name: 'Иван Иванов', groupName: null, response: null },
-      { guestId: null, name: 'Петър', groupName: null, response: null },
+      { guestId: 1, generalResponseId: null, name: 'Иван Иванов', groupName: null, response: null },
+      { guestId: null, generalResponseId: 5, name: 'Петър', groupName: null, response: null },
     ];
     vi.mocked(listResponses).mockResolvedValue(entries);
     const res = await request(app).get('/api/events/1/responses');

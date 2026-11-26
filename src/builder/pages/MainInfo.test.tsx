@@ -8,8 +8,7 @@ import MainInfo from './MainInfo';
 import { todayIso } from '../../dates';
 
 const blankDetails: InvitationDetails = {
-    brideName: '',
-    groomName: '',
+    organizers: [''],
     weddingDate: '',
     place: '',
     colors: ['#ffffff'],
@@ -25,8 +24,7 @@ const blankDetails: InvitationDetails = {
 /** Holds the details like Builder does and prints them so the test can read the result. */
 function Harness() {
     const [details, setDetails] = useState<InvitationDetails>({
-        brideName: '',
-        groomName: '',
+        organizers: [''],
         weddingDate: '',
         place: '',
         colors: ['#ffffff'],
@@ -50,8 +48,9 @@ function Harness() {
 describe('MainInfo', () => {
     it('edits the couple, date, place, colours and text', async () => {
         const { user } = renderWithTheme(<Harness />);
-        await user.type(screen.getByLabelText(/Булка/), 'Мария');
-        await user.type(screen.getByLabelText(/Младоженец/), 'Иван');
+        await user.type(screen.getByLabelText(/^Организатор/), 'Мария');
+        await user.click(screen.getByRole('button', { name: 'Добави съорганизатор' }));
+        await user.type(screen.getByLabelText(/Съорганизатор/), 'Иван');
         await user.type(screen.getByLabelText(/Дата на сватбата/), '12062027');
         expect(screen.getByLabelText(/Дата на сватбата/)).toHaveValue('12/06/2027');
         await user.type(screen.getByLabelText(/Място/), 'Пловдив');
@@ -59,8 +58,7 @@ describe('MainInfo', () => {
         await user.type(screen.getByLabelText('Текст на поканата'), 'Скъпи гости,{Enter}очакваме ви!');
 
         expect(JSON.parse(screen.getByTestId('details').textContent!)).toEqual({
-            brideName: 'Мария',
-            groomName: 'Иван',
+            organizers: ['Мария', 'Иван'],
             weddingDate: '2027-06-12',
             place: 'Пловдив',
             colors: ['#ffffff', '#ffffff'],
@@ -149,9 +147,23 @@ describe('MainInfo', () => {
         expect(uploadImage).not.toHaveBeenCalled()
     })
 
+    it('adds and removes co-organisers, up to two', async () => {
+        const { user } = renderWithTheme(<Harness />);
+        expect(screen.queryByLabelText(/Съорганизатор/)).not.toBeInTheDocument();
+        const add = () => screen.queryByRole('button', { name: 'Добави съорганизатор' });
+        await user.click(add()!);
+        await user.click(add()!);
+        expect(screen.getAllByLabelText(/Съорганизатор/)).toHaveLength(2);
+        expect(add()).not.toBeInTheDocument();
+
+        await user.click(screen.getAllByRole('button', { name: 'Премахни съорганизатора' })[0]);
+        expect(screen.getAllByLabelText(/Съорганизатор/)).toHaveLength(1);
+        expect(add()).toBeInTheDocument();
+    });
+
     it('marks every field as required', () => {
         renderWithTheme(<Harness />);
-        for (const label of [/Булка/, /Младоженец/, /Дата на сватбата/, /Място/]) {
+        for (const label of [/^Организатор/, /Дата на сватбата/, /Място/]) {
             expect(screen.getByLabelText(label)).toBeRequired();
         }
     });

@@ -52,6 +52,7 @@ export default function MenusPanel({ eventId, childCount }: MenusPanelProps) {
 
     return (
         <Panel
+            collapsible
             title={`Менюта (${menus.length})`}
             action={
                 <Button variant="contained" startIcon={<Add />} onClick={() => setEditing('new')}>

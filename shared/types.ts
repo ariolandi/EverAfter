@@ -50,8 +50,8 @@ export const COLOR_USAGES = ['mandatory', 'suggested', 'informative'] as const;
 export type ColorUsage = (typeof COLOR_USAGES)[number];
 
 export interface InvitationDetails extends InvitationColors {
-  brideName: string;
-  groomName: string;
+  /** The organiser's name first, then up to MAX_ORGANIZERS - 1 co-organisers. */
+  organizers: string[];
   /** Wedding date as YYYY-MM-DD, or '' when not set. */
   weddingDate: string;
   /** Where the wedding takes place. */
@@ -67,6 +67,9 @@ export interface InvitationDetails extends InvitationColors {
   /** Whether guests must, are advised to, or are just told about wearing the colours. */
   colorUsage: ColorUsage;
 }
+
+/** The organiser and the co-organisers together. */
+export const MAX_ORGANIZERS = 3;
 
 export const MAX_INVITATION_TEXT_LENGTH = 2000;
 
@@ -98,6 +101,8 @@ export interface PublishedForm extends FormFields, InvitationDetails {
 
 /** An invitation as a guest sees it: with the event's schedule for its schedule page. */
 export interface SharedInvitation extends PublishedForm {
+  /** The event's name, shown as the invitation's heading. */
+  eventName: string;
   schedule: ScheduleItem[];
   /** The event's menus, shown on the invitation's menus page. */
   menus: Menu[];
@@ -184,9 +189,18 @@ export interface ScheduleItem extends ScheduleItemInput {
   createdAt: string;
 }
 
+/** An answer sent from the invitation's general link: the name the guest typed and their choices. */
 export interface FormResponseInput {
   name?: string;
   answer?: boolean;
+  /** Required when the guest comes and has a menu to choose from. */
+  menuId?: number;
+  /** Required when the guest comes. */
+  accommodation?: boolean;
+  /** Required when the guest comes. */
+  transport?: Transport;
+  /** Who the guest would like to share a room with. */
+  roomWith?: string;
 }
 
 /** One guest's answer, sent from a group's link or their own, or entered by an organizer. */
@@ -278,6 +292,8 @@ export interface InvitedGuest {
  */
 export interface GroupInvitation {
   form: PublishedForm;
+  /** The event's name, shown as the invitation's heading. */
+  eventName: string;
   schedule: ScheduleItem[];
   /** The group's name, or the guest's own name on their personal link. */
   groupName: string;
@@ -290,6 +306,8 @@ export interface GroupInvitation {
 export interface ResponseEntry {
   /** Null for an answer sent from the invitation's general link, where the guest typed their own name. */
   guestId: number | null;
+  /** The id of a general-link answer, so organizers can correct it; null on a guest's line. */
+  generalResponseId: number | null;
   name: string;
   groupName: string | null;
   /** Null while the guest hasn't answered. */

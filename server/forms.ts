@@ -8,6 +8,7 @@ import {
   MAX_INVITATION_TEXT_LENGTH,
   MAX_NOTES_LENGTH,
   MAX_NAME_LENGTH,
+  MAX_ORGANIZERS,
   MAX_PLACE_LENGTH,
   type ColorUsage,
   type DressCode,
@@ -21,6 +22,7 @@ import {
   createFormResponse,
   deleteForm,
   getEvent,
+  getEventName,
   getForm,
   getFormImage,
   getImageFile,
@@ -28,6 +30,7 @@ import {
   listScheduleItems,
   updateForm,
 } from './db.js';
+import { parseGuestAnswer } from './responses.js';
 
 export const formRouter = Router();
 
@@ -48,14 +51,21 @@ async function parseFormInput<P>(
   currentImageId: number | null = null,
 ): Promise<FormInput | undefined> {
   const { imageId, showName, showAnswer } = req.body ?? {};
-  const brideName = typeof req.body?.brideName === 'string' ? req.body.brideName.trim() : '';
-  const groomName = typeof req.body?.groomName === 'string' ? req.body.groomName.trim() : '';
+  const organizers: string[] = Array.isArray(req.body?.organizers)
+    ? req.body.organizers.map((name: unknown) => (typeof name === 'string' ? name.trim() : ''))
+    : [];
   if (typeof showName !== 'boolean' || typeof showAnswer !== 'boolean' || (!showName && !showAnswer)) {
     res.status(HttpStatus.BAD_REQUEST).json({ error: 'enable at least one form component' });
     return;
   }
-  if (!brideName || !groomName || brideName.length > MAX_NAME_LENGTH || groomName.length > MAX_NAME_LENGTH) {
-    res.status(HttpStatus.BAD_REQUEST).json({ error: `names must be 1-${MAX_NAME_LENGTH} characters` });
+  if (
+    organizers.length < 1 ||
+    organizers.length > MAX_ORGANIZERS ||
+    organizers.some((name) => !name || name.length > MAX_NAME_LENGTH)
+  ) {
+    res
+      .status(HttpStatus.BAD_REQUEST)
+      .json({ error: `1-${MAX_ORGANIZERS} organizers with names of 1-${MAX_NAME_LENGTH} characters are required` });
     return;
   }
   const weddingDate = typeof req.body?.weddingDate === 'string' ? req.body.weddingDate : '';
@@ -128,8 +138,7 @@ async function parseFormInput<P>(
     imageId,
     fields: { showName, showAnswer },
     details: {
-      brideName,
-      groomName,
+      organizers,
       weddingDate,
       place,
       colors: colors as string[],
@@ -191,6 +200,7 @@ formRouter.get('/:slug', async (req, res) => {
   }
   const invitation: SharedInvitation = {
     ...found.form,
+    eventName: await getEventName(found.eventId),
     schedule: await listScheduleItems(found.eventId),
     menus: await listMenus(found.eventId),
   };
@@ -215,15 +225,20 @@ formRouter.post('/:slug/responses', async (req, res) => {
   }
   const { form } = found;
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-  const answer: unknown = req.body?.answer;
   if (form.showName && (!name || name.length > MAX_NAME_LENGTH)) {
     res.status(HttpStatus.BAD_REQUEST).json({ error: `name must be 1-${MAX_NAME_LENGTH} characters` });
     return;
   }
-  if (form.showAnswer && typeof answer !== 'boolean') {
-    res.status(HttpStatus.BAD_REQUEST).json({ error: 'please answer yes or no' });
+  // Whoever answers from the general link makes the same choices as a guest with a personal link.
+  const parsed = parseGuestAnswer(
+    { name: form.showName ? name : 'guest', isChild: false },
+    { showAnswer: form.showAnswer, menus: await listMenus(found.eventId) },
+    req.body ?? {},
+  );
+  if (!parsed.ok) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: parsed.error });
     return;
   }
-  await createFormResponse(found.id, form.showName ? name : null, form.showAnswer ? (answer as boolean) : null);
+  await createFormResponse(found.id, form.showName ? name : null, parsed.values);
   res.status(HttpStatus.NO_CONTENT).end();
 });

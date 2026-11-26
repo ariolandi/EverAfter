@@ -43,8 +43,9 @@ describe('Builder', () => {
         const save = screen.getByRole('button', { name: 'Запази' });
         expect(save).toBeDisabled();
 
-        await user.type(screen.getByLabelText(/Булка/), 'Мария');
-        await user.type(screen.getByLabelText(/Младоженец/), 'Иван');
+        await user.type(screen.getByLabelText(/^Организатор/), 'Мария');
+        await user.click(screen.getByRole('button', { name: 'Добави съорганизатор' }));
+        await user.type(screen.getByLabelText(/Съорганизатор/), 'Иван');
         await user.type(screen.getByLabelText(/Дата на сватбата/), '12062027');
         await user.type(screen.getByLabelText(/Място/), 'Пловдив');
         await user.click(save);
@@ -54,8 +55,7 @@ describe('Builder', () => {
             null,
             { showName: true, showAnswer: true },
             {
-                brideName: 'Мария',
-                groomName: 'Иван',
+                organizers: ['Мария', 'Иван'],
                 weddingDate: '2027-06-12',
                 place: 'Пловдив',
                 // A new invitation starts with ink text and a gold accent.

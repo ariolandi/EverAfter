@@ -120,6 +120,12 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  saveGeneralResponse: (eventId: number, responseId: number, input: FormResponseInput) =>
+    request<void>(`/api/events/${eventId}/responses/${responseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+
   publishForm: (eventId: number, imageId: number | null, fields: FormFields, details: InvitationDetails) =>
     request<PublishedForm>('/api/forms', {
       method: 'POST',

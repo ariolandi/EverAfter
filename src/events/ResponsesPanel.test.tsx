@@ -13,6 +13,7 @@ const guests = [guest(1, 'Иван Иванов'), guest(2, 'Ники Ивано
 const entries: ResponseEntry[] = [
     {
         guestId: 1,
+        generalResponseId: null,
         name: 'Иван Иванов',
         groupName: 'Иванови',
         response: {
@@ -25,6 +26,7 @@ const entries: ResponseEntry[] = [
     },
     {
         guestId: 2,
+        generalResponseId: null,
         name: 'Ники Иванов',
         groupName: 'Иванови',
         response: {
@@ -35,9 +37,10 @@ const entries: ResponseEntry[] = [
             transport: null,
         },
     },
-    { guestId: 3, name: 'Мария Иванова', groupName: null, response: null },
+    { guestId: 3, generalResponseId: null, name: 'Мария Иванова', groupName: null, response: null },
     {
         guestId: null,
+        generalResponseId: 7,
         name: 'Петър Петров',
         groupName: null,
         response: {
@@ -76,10 +79,11 @@ describe('ResponsesPanel', () => {
         expect(within(niki).getByText('Няма да присъства')).toBeInTheDocument();
         const maria = rows.find((r) => within(r).queryByText('Мария Иванова'))!;
         expect(within(maria).getByText('Очаква отговор')).toBeInTheDocument();
-        // Answers sent from the general link are listed too, without a guest to open or edit.
+        // Answers sent from the general link are listed too, with no invitation to open, but their answer can be corrected.
         const petar = rows.find((r) => within(r).queryByText('Петър Петров'))!;
         expect(within(petar).getByText('Ще присъства')).toBeInTheDocument();
-        expect(within(petar).queryByRole('button')).not.toBeInTheDocument();
+        expect(within(petar).queryByRole('link')).not.toBeInTheDocument();
+        expect(within(petar).getByRole('button', { name: 'Редактирай отговора на Петър Петров' })).toBeInTheDocument();
     });
 
     it('opens a guest’s own invitation to preview it', async () => {
@@ -107,6 +111,7 @@ describe('ResponsesPanel', () => {
             answer: true,
             menuId: 20,
             accommodation: false,
+            roomWith: '',
             transport: 'own',
         });
         expect(api.listResponses).toHaveBeenCalledTimes(2);

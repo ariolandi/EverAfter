@@ -8,6 +8,7 @@ import { scriptFont } from '../theme/typography';
 import { joinGuestNames } from './guestNames';
 import RsvpForm from './RsvpForm';
 import MenusPage from './MenusPage';
+import EnvelopeIntro from './EnvelopeIntro';
 import ScaledFrame from './ScaledFrame';
 import ScheduleDressCode from './ScheduleDressCode';
 import { GoldRule } from '../components/goldRule';
@@ -25,6 +26,8 @@ interface Props {
     page?: number;
     /** Called when the reader moves to another page by arrow or scrolling. */
     onPageChange?: (page: number) => void;
+    /** The event's name, shown as the big heading of the first page. */
+    eventName: string;
     /** Names of the guests the invitation is addressed to; omit (or leave empty) to greet the guests in general. */
     guestNames?: string[];
     /** The event's schedule, shown on the second page; omit (or leave empty) to show only the dress code. */
@@ -33,6 +36,8 @@ interface Props {
     menus?: Menu[];
     /** Pages after the menus where guests make their choices (menu, accommodation, transport), one per element. */
     guestPages?: ReactNode[];
+    /** Opens with the invitation being taken out of an envelope in the secondary colour. For guests' links only. */
+    envelope?: boolean;
 }
 
 interface PageProps {
@@ -167,14 +172,16 @@ export default function InvitationForm({
     imageUrl,
     onSubmit,
     responseForm,
+    eventName,
     page,
     onPageChange,
     guestNames = [],
     schedule = [],
     menus = [],
     guestPages = [],
+    envelope = false,
 }: Props) {
-    const coupleTitle = [details.brideName, details.groomName]
+    const coupleTitle = details.organizers
         .map((n) => n.trim())
         .filter(Boolean)
         .join(' & ');
@@ -191,10 +198,47 @@ export default function InvitationForm({
     const invite = `имаме удоволствието да ${names.length === 1 ? 'те' : 'ви'} поканим на`;
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    const animationRef = useRef<number>(0);
+    // While our own animation runs, scroll events are ours, not the reader's, and must not be reported back.
+    const animatingRef = useRef(false);
+
+    // Scroll snapping fights a smooth scroll (browsers jump or cut it short), so the animation is driven by hand
+    // with snapping switched off, and snapping is restored once the page has settled.
     const scrollToPage = (target: number) => {
         const el = scrollRef.current;
-        el?.scrollTo({ top: target * el.clientHeight, behavior: 'smooth' });
+        if (!el) return;
+        cancelAnimationFrame(animationRef.current);
+        const from = el.scrollTop;
+        const to = target * el.clientHeight;
+        if (from === to) return;
+        // Deliberately slow, and not skipped for "reduce motion": that setting is on by default whenever Windows
+        // animation effects are off, which made the page jump instead of glide.
+        const duration = Math.min(1400, 900 + Math.abs(to - from) / 3);
+        let start: number | null = null;
+        animatingRef.current = true;
+        el.style.scrollSnapType = 'none';
+        const step = (now: number) => {
+            start ??= now;
+            const t = Math.min(1, (now - start) / duration);
+            const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            el.scrollTop = from + (to - from) * eased;
+            if (t < 1) {
+                animationRef.current = requestAnimationFrame(step);
+            } else {
+                animatingRef.current = false;
+                el.style.scrollSnapType = '';
+            }
+        };
+        animationRef.current = requestAnimationFrame(step);
     };
+
+    useEffect(
+        () => () => {
+            cancelAnimationFrame(animationRef.current);
+            animatingRef.current = false;
+        },
+        [],
+    );
 
     useEffect(() => {
         if (page !== undefined) scrollToPage(page);
@@ -205,7 +249,7 @@ export default function InvitationForm({
 
     const reportScrolledPage = () => {
         const el = scrollRef.current;
-        if (el && onPageChange) onPageChange(Math.round(el.scrollTop / el.clientHeight));
+        if (el && onPageChange && !animatingRef.current) onPageChange(Math.round(el.scrollTop / el.clientHeight));
     };
 
     const tinted = (content: ReactNode) => (
@@ -233,7 +277,7 @@ export default function InvitationForm({
                     <GoldRule />
                     <Subtitle>{invite}</Subtitle>
                     <Typography variant="metallic" component="h2" align="center" sx={{ fontSize: '4.5rem' }}>
-                        Сватба
+                        {eventName}
                     </Typography>
                     <Subtitle>на <i>{weddingDate}</i></Subtitle>
                     <Subtitle italic>{place}</Subtitle>
@@ -280,5 +324,6 @@ export default function InvitationForm({
     );
 
     // Everything is laid out at one design size and scaled to the screen, so it looks the same on every device.
-    return <ScaledFrame>{scroller}</ScaledFrame>;
+    const framed = <ScaledFrame>{scroller}</ScaledFrame>;
+    return envelope ? <EnvelopeIntro color={nameColor}>{framed}</EnvelopeIntro> : framed;
 }

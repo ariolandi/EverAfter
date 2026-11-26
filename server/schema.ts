@@ -173,8 +173,8 @@ export const forms = pgTable('forms', {
   imageId: integer('image_id').references(() => images.id, { onDelete: 'set null' }),
   showName: boolean('show_name').notNull(),
   showAnswer: boolean('show_answer').notNull(),
-  brideName: text('bride_name').notNull(),
-  groomName: text('groom_name').notNull(),
+  // The organiser's name first, then the co-organisers'.
+  organizers: jsonb('organizers').$type<string[]>().notNull(),
   weddingDate: text('wedding_date').notNull(),
   place: text('place').notNull(),
   colors: jsonb('colors').$type<string[]>().notNull(),

@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import Edit from '@mui/icons-material/Edit';
 import OpenInNew from '@mui/icons-material/OpenInNew';
-import type { Guest, GuestResponse, GuestResponseInput, Menu, PublishedForm, ResponseEntry } from '../../shared/types';
+import type { FormResponseInput, Guest, GuestResponse, GuestResponseInput, Menu, PublishedForm, ResponseEntry } from '../../shared/types';
 import { api } from '../api';
 import MutedText from '../components/MutedText';
 import Panel from '../components/Panel';
@@ -47,6 +47,8 @@ export default function ResponsesPanel({ eventId, guests, invitation }: Response
     const [menus, setMenus] = useState<Menu[]>([]);
     // The guest whose answer is being edited in the dialog, null when it is closed.
     const [editing, setEditing] = useState<Guest | null>(null);
+    // The general-link answer being corrected, null when its dialog is closed.
+    const [editingGeneral, setEditingGeneral] = useState<ResponseEntry | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const load = useCallback(
@@ -72,7 +74,13 @@ export default function ResponsesPanel({ eventId, guests, invitation }: Response
         await load();
     };
 
-    const answered = entries.filter((e) => e.response).length;
+    const saveGeneral = async (input: FormResponseInput) => {
+        await api.saveGeneralResponse(eventId, editingGeneral!.generalResponseId!, input);
+        setEditingGeneral(null);
+        await load();
+    };
+
+    const answered =entries.filter((e) => e.response).length;
     const menuName = (id: number | null) => menus.find((m) => m.id === id)?.name ?? '—';
 
     return (
@@ -96,6 +104,7 @@ export default function ResponsesPanel({ eventId, guests, invitation }: Response
                                 <TableCell>Присъствие</TableCell>
                                 <TableCell>Меню</TableCell>
                                 <TableCell>Нощувка</TableCell>
+                                <TableCell>Стая с</TableCell>
                                 <TableCell>Превоз</TableCell>
                                 <TableCell>Отговорил на</TableCell>
                                 <TableCell />
@@ -106,14 +115,15 @@ export default function ResponsesPanel({ eventId, guests, invitation }: Response
                                 const guest = guests.find((g) => g.id === entry.guestId);
                                 const { response } = entry;
                                 return (
-                                    <TableRow key={entry.guestId ?? `general-${index}`}>
+                                    <TableRow key={entry.guestId ?? `general-${entry.generalResponseId ?? index}`}>
                                         <TableCell component="th" scope="row">
-                                            {entry.name}
+                                            {entry.name || '—'}
                                         </TableCell>
                                         <TableCell>{entry.groupName ?? '—'}</TableCell>
                                         <TableCell>{attendance(response, showAnswer)}</TableCell>
                                         <TableCell>{response ? menuName(response.menuId) : '—'}</TableCell>
                                         <TableCell>{yesNo(response?.accommodation ?? null)}</TableCell>
+                                        <TableCell>{response?.roomWith || '—'}</TableCell>
                                         <TableCell>
                                             {response?.transport ? TRANSPORT_SHORT_LABELS[response.transport] : '—'}
                                         </TableCell>
@@ -142,6 +152,15 @@ export default function ResponsesPanel({ eventId, guests, invitation }: Response
                                                     </IconButton>
                                                 </>
                                             )}
+                                            {entry.generalResponseId !== null && (
+                                                <IconButton
+                                                    aria-label={`Редактирай отговора на ${entry.name || 'гост'}`}
+                                                    title="Поправи отговора"
+                                                    onClick={() => setEditingGeneral(entry)}
+                                                >
+                                                    <Edit fontSize="small" />
+                                                </IconButton>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 );
@@ -160,6 +179,19 @@ export default function ResponsesPanel({ eventId, guests, invitation }: Response
                     showAnswer={showAnswer}
                     onCancel={() => setEditing(null)}
                     onSave={save}
+                />
+            )}
+
+            {editingGeneral && (
+                <ResponseDialog
+                    key={editingGeneral.generalResponseId}
+                    guest={{ name: editingGeneral.name, isChild: false }}
+                    editableName={invitation?.showName ?? true}
+                    response={editingGeneral.response}
+                    menus={menus}
+                    showAnswer={showAnswer}
+                    onCancel={() => setEditingGeneral(null)}
+                    onSave={saveGeneral}
                 />
             )}
         </Panel>

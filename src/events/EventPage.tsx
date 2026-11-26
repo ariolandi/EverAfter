@@ -105,8 +105,11 @@ export default function EventPage({ eventId, onBack, onEditInvitation }: EventPa
             {error && <Alert severity="error">{error}</Alert>}
 
             {event && (
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
-                    <Panel title={`Списък с гости (${guests.length})`}>
+                <Stack spacing={3}>
+                    {/* Two independent columns, so every panel is only as tall as its own content. */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, alignItems: 'start' }}>
+                    <Stack spacing={3}>
+                    <Panel title={`Списък с гости (${guests.length})`} collapsible>
                         {childCount > 0 && (
                             <MutedText>
                                 Възрастни: {guests.length - childCount} · Деца: {childCount}
@@ -184,11 +187,24 @@ export default function EventPage({ eventId, onBack, onEditInvitation }: EventPa
                         )}
                     </Panel>
 
+                    <GuestGroupsPanel
+                        eventId={eventId}
+                        guests={guests}
+                        groups={groups}
+                        onGroupsChange={setGroups}
+                        hasInvitation={Boolean(invitation)}
+                    />
+
+                    <CoownersPanel event={event} />
+
+                    </Stack>
+
+                    <Stack spacing={3}>
                     <Panel title="Покана">
                         {invitation ? (
                             <>
                                 <Typography>
-                                    {invitation.brideName} & {invitation.groomName}
+                                    {invitation.organizers.join(' & ')}
                                 </Typography>
                                 <Typography color="text.secondary">
                                     {isoToDisplayDate(invitation.weddingDate)} · {invitation.place}
@@ -227,24 +243,15 @@ export default function EventPage({ eventId, onBack, onEditInvitation }: EventPa
                         )}
                     </Panel>
 
-                    <GuestGroupsPanel
-                        eventId={eventId}
-                        guests={guests}
-                        groups={groups}
-                        onGroupsChange={setGroups}
-                        hasInvitation={Boolean(invitation)}
-                    />
-
                     <MenusPanel eventId={eventId} childCount={childCount} />
 
                     <SchedulePanel eventId={eventId} />
 
-                    <CoownersPanel event={event} />
-
-                    <Box sx={{ gridColumn: { md: '1 / -1' } }}>
-                        <ResponsesPanel eventId={eventId} guests={guests} invitation={invitation ?? null} />
+                    </Stack>
                     </Box>
-                </Box>
+
+                    <ResponsesPanel eventId={eventId} guests={guests} invitation={invitation ?? null} />
+                </Stack>
             )}
 
             <ConfirmDeleteDialog title="Изтриване на покана" deletion={invitationDeletion}>

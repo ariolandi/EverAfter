@@ -27,6 +27,15 @@ type RsvpFormProps = { fields: FormFields } & (
       /** Omitted for the invitation's general link: the guest types their own name. */
       guests?: undefined;
       responses?: undefined;
+      /** The event's menus, for the guest to pick from on the menu page. */
+      menus?: Menu[];
+      /** Which part of the form to render, as for a group; the invitation splits it over its pages. */
+      part?: GroupFormPart;
+      /** What the guest has typed and picked, kept by the parent so the pages share it; omit to keep it here. */
+      draft?: SingleDraft;
+      onDraftChange?: (draft: SingleDraft) => void;
+      /** Pass to ask for a menu, accommodation and transport as well, as on a group's link. */
+      withChoices?: boolean;
       /** Omit to render a non-submittable preview. */
       onSubmit?: (response: FormResponseInput) => Promise<void>;
     }
@@ -76,21 +85,66 @@ export default function RsvpForm(props: RsvpFormProps) {
       onSubmit={props.onSubmit}
     />
   ) : (
-    <SingleForm fields={props.fields} onSubmit={props.onSubmit} />
+    <SingleForm
+      fields={props.fields}
+      menus={props.menus}
+      part={props.part}
+      draft={props.draft}
+      onDraftChange={props.onDraftChange}
+      withChoices={props.withChoices}
+      onSubmit={props.onSubmit}
+    />
   );
 }
 
+/** The id the one guest of the general link goes by on the choice pages. */
+export const SELF_ID = 0;
+
+/** What the guest of the general link has typed and picked so far. */
+export interface SingleDraft {
+  name: string;
+  answer: boolean | null;
+  choices: GuestChoices;
+}
+
+export const emptyDraft: SingleDraft = { name: '', answer: null, choices: noChoices };
+
 function SingleForm({
   fields,
+  menus = [],
+  part = 'all',
+  draft: controlledDraft,
+  onDraftChange,
+  withChoices = false,
   onSubmit,
 }: {
   fields: FormFields;
+  menus?: Menu[];
+  part?: GroupFormPart;
+  draft?: SingleDraft;
+  onDraftChange?: (draft: SingleDraft) => void;
+  /** Whether the guest also picks a menu, accommodation and transport on pages of their own. */
+  withChoices?: boolean;
   onSubmit?: (response: FormResponseInput) => Promise<void>;
 }) {
-  const [name, setName] = useState('');
-  const [answer, setAnswer] = useState<boolean | null>(null);
+  const [ownDraft, setOwnDraft] = useState<SingleDraft>(emptyDraft);
+  const { name, answer, choices } = controlledDraft ?? ownDraft;
+  const setDraft = (patch: Partial<SingleDraft>) => (onDraftChange ?? setOwnDraft)({ name, answer, choices, ...patch });
 
-  const complete = (!fields.showName || name.trim() !== '') && (!fields.showAnswer || answer !== null);
+  // Only a guest who comes chooses a menu (if one is meant for them), accommodation and transport.
+  const attends = !fields.showAnswer || answer === true;
+  const picksMenu = withChoices && attends && menusForGuest(menus, false).length > 0;
+  const picksLogistics = withChoices && attends;
+  const transport = choices.transport[SELF_ID] === 'none' ? undefined : choices.transport[SELF_ID];
+  const accommodation = choices.accommodation[SELF_ID];
+  const menuId = choices.menus[SELF_ID];
+  const roomWith = accommodation ? choices.roomWith[SELF_ID]?.trim() : undefined;
+
+  const complete =
+    (!fields.showName || name.trim() !== '') &&
+    (!fields.showAnswer || answer !== null) &&
+    (!picksMenu || menuId !== undefined) &&
+    (!picksLogistics || (accommodation !== undefined && transport !== undefined));
   const submission = useConfirmedSubmit(
     complete,
     onSubmit &&
@@ -98,12 +152,55 @@ function SingleForm({
         onSubmit({
           ...(fields.showName && { name: name.trim() }),
           ...(fields.showAnswer && answer !== null && { answer }),
+          ...(picksMenu && { menuId }),
+          ...(picksLogistics && { accommodation, transport }),
+          ...(roomWith && { roomWith }),
         })),
   );
   const { submitting } = submission;
 
+  const sendControls = (
+    <>
+      {submission.error && <Alert severity="error">{submission.error}</Alert>}
+      <Button type="submit" variant="contained" disabled={!onSubmit || !complete || submitting}>
+        Изпрати
+      </Button>
+    </>
+  );
+  const dialog = (
+    <ConfirmSubmitDialog {...submission.dialogProps}>
+      {fields.showName ? (
+        <GroupAnswer
+          guests={[
+            {
+              name: name.trim(),
+              answer: fields.showAnswer ? answer : null,
+              extras: describeChoices(menus, {
+                menuId: picksMenu ? (menuId ?? null) : null,
+                accommodation: picksLogistics ? (accommodation ?? null) : null,
+                transport: picksLogistics ? (choices.transport[SELF_ID] ?? null) : null,
+                roomWith: roomWith ?? null,
+              }),
+            },
+          ]}
+        />
+      ) : (
+        answer !== null && <Alert severity="info">{ownAnswerLabel(answer)}</Alert>
+      )}
+    </ConfirmSubmitDialog>
+  );
+
+  if (part === 'submit') {
+    return (
+      <FormCard onSubmit={submission.sent ? undefined : submission.review}>
+        {submission.sent ? <SubmitSuccess /> : <Stack spacing={1.5}>{sendControls}</Stack>}
+        {dialog}
+      </FormCard>
+    );
+  }
+
   return (
-    <FormCard onSubmit={submission.review}>
+    <FormCard onSubmit={part === 'all' ? submission.review : undefined}>
       {submission.sent ? (
         <SubmitSuccess />
       ) : (
@@ -113,7 +210,7 @@ function SingleForm({
               required
               label="Вашето име"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => setDraft({ name: e.target.value })}
               slotProps={{ htmlInput: { maxLength: MAX_NAME_LENGTH } }}
               size="small"
               fullWidth
@@ -121,21 +218,17 @@ function SingleForm({
             />
           )}
           {fields.showAnswer && (
-            <AttendanceToggle value={answer} onChange={setAnswer} disabled={submitting} label={ownAnswerLabel} />
+            <AttendanceToggle
+              value={answer}
+              onChange={(next) => setDraft({ answer: next })}
+              disabled={submitting}
+              label={ownAnswerLabel}
+            />
           )}
-          {submission.error && <Alert severity="error">{submission.error}</Alert>}
-          <Button type="submit" variant="contained" disabled={!onSubmit || !complete || submitting}>
-            Изпрати
-          </Button>
+          {part === 'all' && sendControls}
         </Stack>
       )}
-      <ConfirmSubmitDialog {...submission.dialogProps}>
-        {fields.showName ? (
-          <GroupAnswer guests={[{ name: name.trim(), answer: fields.showAnswer ? answer : null }]} />
-        ) : (
-          answer !== null && <Alert severity="info">{ownAnswerLabel(answer)}</Alert>
-        )}
-      </ConfirmSubmitDialog>
+      {part === 'all' && dialog}
     </FormCard>
   );
 }

@@ -55,7 +55,7 @@ const arrowSx = {
 } as const;
 
 /** Opacity of the plaque's white fill, from 0 (clear) to 1 (solid); lower lets the background show through. */
-const PLAQUE_OPACITY = 0.75;
+const PLAQUE_OPACITY = 0.95;
 
 /** Radius of the plaque's inward-arched corners, and the width of its gold edge. */
 const CORNER_RADIUS = 28;
@@ -103,7 +103,7 @@ const plaqueSx = {
     position: 'relative',
     // Taller than its content, but not the whole page; long text scrolls inside.
     flex: '0 1 auto',
-    minHeight: '85%',
+    minHeight: '93%',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'center',
@@ -136,8 +136,8 @@ function InvitationPage({ children, imageUrl, onNext, onPrev }: PageProps) {
                 justifyContent: 'center',
                 // The same padding on every page, leaving room for both arrows, so the plaque never moves.
                 px: 2,
-                pt: 10,
-                pb: 7,
+                pt: 11,
+                pb: 8,
                 bgcolor: 'background.default',
                 backgroundImage: imageUrl ? `url(${imageUrl})` : 'none',
                 backgroundSize: 'cover',
@@ -146,15 +146,15 @@ function InvitationPage({ children, imageUrl, onNext, onPrev }: PageProps) {
         >
             {onPrev && (
                 // Set below the top edge so the builder's phone notch doesn't cover it.
-                <IconButton aria-label="Към предишната страница" onClick={onPrev} sx={{ ...arrowSx, top: 36 }}>
-                    <KeyboardArrowUp fontSize="large" />
+                <IconButton aria-label="Към предишната страница" onClick={onPrev} sx={{ ...arrowSx, top: 32 }}>
+                    <KeyboardArrowUp sx={{ fontSize: '2.5rem' }} />
                 </IconButton>
             )}
             {/* Every page shows its content on the same plaque. */}
             <Box sx={plaqueSx}>{children}</Box>
             {onNext && (
                 <IconButton aria-label="Към следващата страница" onClick={onNext} sx={{ ...arrowSx, bottom: 8 }}>
-                    <KeyboardArrowDown fontSize="large" />
+                    <KeyboardArrowDown sx={{ fontSize: '2.5rem' }} />
                 </IconButton>
             )}
         </Box>
@@ -232,7 +232,7 @@ export default function InvitationForm({
                     </Typography>
                     <GoldRule />
                     <Subtitle>{invite}</Subtitle>
-                    <Typography variant="metallic" component="h2" align="center">
+                    <Typography variant="metallic" component="h2" align="center" sx={{ fontSize: '4.5rem' }}>
                         Сватба
                     </Typography>
                     <Subtitle>на <i>{weddingDate}</i></Subtitle>
@@ -240,7 +240,7 @@ export default function InvitationForm({
                     <GoldRule />
                     <Subtitle>Нека заедно отбележим този щастлив момент!</Subtitle>
                     {/* The couple's names in gold, smaller than the heading. */}
-                    <Typography variant="metallic" component="h5" align="center" sx={{ fontWeight: 600, fontSize: '1.5rem' }}>
+                    <Typography variant="metallic" component="h5" align="center" sx={{ fontSize: '1.75rem' }}>
                         {coupleTitle}
                     </Typography>
                 </Stack>,

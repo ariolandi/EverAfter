@@ -90,8 +90,12 @@ export default function ScheduleDressCode({ details, schedule, textColor, accent
                             }}
                         />
                     ))}
-                    {details.colorUsage == 'informative' && <Subtitle italic size='0.75rem'>Спазването им не е задължително</Subtitle>}
                 </Stack>
+                {details.colorUsage == 'informative' && (
+                    <Subtitle italic size="0.75rem">
+                        Спазването им не е задължително
+                    </Subtitle>
+                )}
             </Stack>
         </Stack>
     );

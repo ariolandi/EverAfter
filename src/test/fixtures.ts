@@ -14,6 +14,8 @@ export const publishedForm = (overrides: Partial<PublishedForm> = {}): Published
     primaryColor: 0,
     secondaryColor: 1,
     invitationText: '',
+    accommodationNotes: '',
+    transportNotes: '',
     dressCode: 'cocktail',
     colorUsage: 'informative',
     ...overrides,
@@ -34,6 +36,7 @@ export const guest = (id: number, name: string, groupId: number | null = null, i
     id,
     name,
     groupId,
+    token: `guest-token-${id}`,
     isChild,
     createdAt: '2026-11-01T10:00:00.000Z',
 });

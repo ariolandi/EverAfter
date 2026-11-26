@@ -2,6 +2,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from "react"
 import { Alert, Box, Button, Stack, TextField, Typography } from "@mui/material"
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate"
 import {
+    MAX_INVITATION_TEXT_LENGTH,
     MAX_NAME_LENGTH,
     MAX_PLACE_LENGTH,
     MAX_UPLOAD_BYTES,
@@ -99,6 +100,19 @@ export default function MainInfo({ details, setDetails, image = null, onImageCha
                     fullWidth
                 />
             </Stack>
+            <TextField
+                label="Текст на поканата"
+                value={details.invitationText}
+                onChange={(e) => setDetails((current) => ({ ...current, invitationText: e.target.value }))}
+                // A plain textarea (not MUI's autosizing one), so the plaque keeps its height however long the text is.
+                slotProps={{
+                    input: { inputComponent: 'textarea' },
+                    htmlInput: { rows: 4, maxLength: MAX_INVITATION_TEXT_LENGTH },
+                }}
+                sx={{ '& textarea': { resize: 'none' } }}
+                size="small"
+                fullWidth
+            />
             <Stack spacing={1}>
                 <Typography variant="subtitle2">Снимка за фон</Typography>
                 <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>

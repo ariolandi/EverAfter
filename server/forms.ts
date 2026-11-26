@@ -6,6 +6,7 @@ import {
   DRESS_CODES,
   MAX_COLORS,
   MAX_INVITATION_TEXT_LENGTH,
+  MAX_NOTES_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PLACE_LENGTH,
   type ColorUsage,
@@ -97,6 +98,15 @@ async function parseFormInput<P>(
       .json({ error: `invitationText must be at most ${MAX_INVITATION_TEXT_LENGTH} characters` });
     return;
   }
+  const notes: Record<'accommodationNotes' | 'transportNotes', string> = { accommodationNotes: '', transportNotes: '' };
+  for (const key of ['accommodationNotes', 'transportNotes'] as const) {
+    const value = req.body?.[key];
+    notes[key] = typeof value === 'string' ? value.trim() : '';
+    if (notes[key].length > MAX_NOTES_LENGTH) {
+      res.status(HttpStatus.BAD_REQUEST).json({ error: `${key} must be at most ${MAX_NOTES_LENGTH} characters` });
+      return;
+    }
+  }
   const { dressCode, colorUsage } = req.body ?? {};
   if (!DRESS_CODES.includes(dressCode)) {
     res.status(HttpStatus.BAD_REQUEST).json({ error: `dressCode must be one of: ${DRESS_CODES.join(', ')}` });
@@ -126,6 +136,7 @@ async function parseFormInput<P>(
       primaryColor,
       secondaryColor,
       invitationText,
+      ...notes,
       dressCode: dressCode as DressCode,
       colorUsage: colorUsage as ColorUsage,
     },
@@ -178,7 +189,9 @@ formRouter.get('/:slug', async (req, res) => {
     res.status(HttpStatus.NOT_FOUND).json({ error: 'form not found' });
     return;
   }
-  const invitation: SharedInvitation = { ...found.form, schedule: await listScheduleItems(found.eventId),
+  const invitation: SharedInvitation = {
+    ...found.form,
+    schedule: await listScheduleItems(found.eventId),
     menus: await listMenus(found.eventId),
   };
   res.json(invitation);

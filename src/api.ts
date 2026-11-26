@@ -6,16 +6,17 @@ import type {
   FormResponseInput,
   GeneratedImage,
   GroupInvitation,
-  GroupResponse,
   GroupResponseInput,
   Guest,
   GuestGroup,
   GuestGroupInput,
   GuestInput,
+  GuestResponseInput,
   InvitationDetails,
   Menu,
   MenuInput,
   PublishedForm,
+  ResponseEntry,
   ScheduleItem,
   ScheduleItemInput,
   SharedInvitation,
@@ -102,9 +103,21 @@ export const api = {
     request<void>(`/api/events/${eventId}/schedule/${id}`, { method: 'DELETE' }),
   getGroupInvitation: (token: string) => request<GroupInvitation>(`/api/groups/${encodeURIComponent(token)}`),
   submitGroupResponse: (token: string, response: GroupResponseInput) =>
-    request<GroupResponse>(`/api/groups/${encodeURIComponent(token)}/responses`, {
+    request<GroupInvitation>(`/api/groups/${encodeURIComponent(token)}/responses`, {
       method: 'POST',
       body: JSON.stringify(response),
+    }),
+  getGuestInvitation: (token: string) => request<GroupInvitation>(`/api/guests/${encodeURIComponent(token)}`),
+  submitGuestResponse: (token: string, response: GroupResponseInput) =>
+    request<GroupInvitation>(`/api/guests/${encodeURIComponent(token)}/responses`, {
+      method: 'POST',
+      body: JSON.stringify(response),
+    }),
+  listResponses: (eventId: number) => request<ResponseEntry[]>(`/api/events/${eventId}/responses`),
+  saveGuestResponse: (eventId: number, guestId: number, input: GuestResponseInput) =>
+    request<void>(`/api/events/${eventId}/guests/${guestId}/response`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
     }),
 
   publishForm: (eventId: number, imageId: number | null, fields: FormFields, details: InvitationDetails) =>

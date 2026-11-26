@@ -7,12 +7,15 @@ import { authRouter, loadUser, requireUser } from './auth.js';
 import { createTask, deleteTask, listTasks, migrateDatabase, setTaskCompleted } from './db.js';
 import { eventRouter } from './events.js';
 import { formRouter } from './forms.js';
-import { groupRouter } from './groups.js';
+import { groupRouter, guestRouter } from './groups.js';
 import { imageRouter } from './images.js';
+import { rateLimit, securityHeaders } from './security.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
 
+app.disable('x-powered-by');
+app.use(securityHeaders);
 app.use(express.json());
 app.use(cookieParser());
 app.use(loadUser);
@@ -64,8 +67,12 @@ app.delete('/api/tasks/:id', async (req, res) => {
 
 app.use('/api/events', eventRouter);
 app.use('/api/images', imageRouter);
-app.use('/api/forms', formRouter);
-app.use('/api/groups', groupRouter);
+// Public endpoints need no sign-in, so they are rate limited: personal link tokens can't be guessed or
+// answers flooded at will.
+const publicLimit = rateLimit(120, 60_000);
+app.use('/api/forms', publicLimit, formRouter);
+app.use('/api/groups', publicLimit, groupRouter);
+app.use('/api/guests', publicLimit, guestRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const clientDir = path.resolve('dist');

@@ -8,15 +8,24 @@ import { theme } from './theme/theme';
 import './fonts.css';
 
 // Share links look like /f/<slug> and open the public form without signing in;
-// a guest group's personal link looks like /g/<token>.
+// a guest group's personal link looks like /g/<token>, and a single guest's like /i/<token>.
 const shareSlug = window.location.pathname.match(/^\/f\/([\w-]+)\/?$/)?.[1];
 const groupToken = window.location.pathname.match(/^\/g\/([\w-]+)\/?$/)?.[1];
+const guestToken = window.location.pathname.match(/^\/i\/([\w-]+)\/?$/)?.[1];
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      {shareSlug ? <SharedForm slug={shareSlug} /> : groupToken ? <GroupInvite token={groupToken} /> : <App />}
+      {shareSlug ? (
+        <SharedForm slug={shareSlug} />
+      ) : groupToken ? (
+        <GroupInvite token={groupToken} />
+      ) : guestToken ? (
+        <GroupInvite token={guestToken} kind="guest" />
+      ) : (
+        <App />
+      )}
     </ThemeProvider>
   </StrictMode>,
 );

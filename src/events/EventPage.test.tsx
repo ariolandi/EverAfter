@@ -19,6 +19,7 @@ describe('EventPage', () => {
         vi.mocked(api.listGroups).mockResolvedValue([guestGroup({ id: 10, name: 'Иванови', guestIds: [1] })]);
         vi.mocked(api.listCoowners).mockResolvedValue([]);
         vi.mocked(api.listMenus).mockResolvedValue([]);
+        vi.mocked(api.listResponses).mockResolvedValue([]);
         vi.mocked(api.listSchedule).mockResolvedValue([]);
     });
 

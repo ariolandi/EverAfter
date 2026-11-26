@@ -36,7 +36,7 @@ export const theme = createTheme({
     // Gold leaf: banded gradient clipped to the glyphs, with a soft drop shadow for depth.
     metallic: {
       fontFamily: scriptFont,
-      fontWeight: 400,
+      fontWeight: 700,
       fontSize: '4rem',
       lineHeight: 1.2,
       letterSpacing: '0.02em',

@@ -16,6 +16,8 @@ const blankDetails: InvitationDetails = {
     primaryColor: 0,
     secondaryColor: 0,
     invitationText: '',
+    accommodationNotes: '',
+    transportNotes: '',
     dressCode: 'cocktail',
     colorUsage: 'informative',
 };
@@ -31,6 +33,8 @@ function Harness() {
         primaryColor: 0,
         secondaryColor: 0,
         invitationText: '',
+        accommodationNotes: '',
+        transportNotes: '',
         dressCode: 'cocktail',
         colorUsage: 'informative',
     });
@@ -64,6 +68,10 @@ describe('MainInfo', () => {
             primaryColor: 0,
             secondaryColor: 1,
             invitationText: 'Скъпи гости,\nочакваме ви!',
+            accommodationNotes: '',
+            transportNotes: '',
+            dressCode: 'cocktail',
+            colorUsage: 'informative',
         });
     });
 

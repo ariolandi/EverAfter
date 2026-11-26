@@ -51,6 +51,7 @@ describe('App', () => {
         vi.mocked(api.listGroups).mockResolvedValue([]);
         vi.mocked(api.listCoowners).mockResolvedValue([]);
         vi.mocked(api.listMenus).mockResolvedValue([]);
+        vi.mocked(api.listResponses).mockResolvedValue([]);
         vi.mocked(api.listSchedule).mockResolvedValue([]);
         vi.mocked(api.listImages).mockResolvedValue([]);
         const { user: actor } = renderWithTheme(<App />);
@@ -116,6 +117,7 @@ function mockSignedInEvent() {
     vi.mocked(api.listGroups).mockResolvedValue([]);
     vi.mocked(api.listCoowners).mockResolvedValue([]);
     vi.mocked(api.listMenus).mockResolvedValue([]);
+    vi.mocked(api.listResponses).mockResolvedValue([]);
     vi.mocked(api.listSchedule).mockResolvedValue([]);
     vi.mocked(api.listImages).mockResolvedValue([]);
 }

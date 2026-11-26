@@ -37,6 +37,8 @@ const body = {
   primaryColor: 0,
   secondaryColor: 1,
   invitationText: '',
+  accommodationNotes: '',
+  transportNotes: '',
   dressCode: 'formal',
   colorUsage: 'mandatory',
 };
@@ -55,6 +57,8 @@ const form: PublishedForm = {
   primaryColor: 0,
   secondaryColor: 1,
   invitationText: '',
+  accommodationNotes: '',
+  transportNotes: '',
   dressCode: 'formal',
   colorUsage: 'mandatory',
 };
@@ -100,7 +104,15 @@ describe('GET /api/forms/:slug', () => {
     vi.mocked(getForm).mockResolvedValue({ id: 5, eventId: 1, form });
     vi.mocked(listScheduleItems).mockResolvedValue(schedule);
     const menus = [
-      { id: 20, name: 'Меню', isChild: false, salad: 'А', appetizer: 'Б', mainCourse: 'В', createdAt: '2026-11-01T10:00:00.000Z' },
+      {
+        id: 20,
+        name: 'Меню',
+        isChild: false,
+        salad: 'А',
+        appetizer: 'Б',
+        mainCourse: 'В',
+        createdAt: '2026-11-01T10:00:00.000Z',
+      },
     ];
     vi.mocked(listMenus).mockResolvedValue(menus);
     const res = await request(app).get('/api/forms/abc123');

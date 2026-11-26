@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import Add from '@mui/icons-material/Add';
 import ChildCare from '@mui/icons-material/ChildCare';
+import LinkIcon from '@mui/icons-material/Link';
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
 import Edit from '@mui/icons-material/Edit';
 import OpenInNew from '@mui/icons-material/OpenInNew';
@@ -29,7 +30,7 @@ import Panel from '../components/Panel';
 import ShareLinkField from '../components/ShareLinkField';
 import { isoToDisplayDate } from '../dates';
 import { errorMessage } from '../errors';
-import { shareUrlFor } from '../form/shareUrl';
+import { guestShareUrlFor, shareUrlFor } from '../form/shareUrl';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useConfirmDelete } from '../hooks/useConfirmDelete';
 import { sortByName } from '../sortByName';
@@ -37,6 +38,7 @@ import CoownersPanel from './CoownersPanel';
 import GuestGroupsPanel from './GuestGroupsPanel';
 import { loadEvent } from './loadEvent';
 import MenusPanel from './MenusPanel';
+import ResponsesPanel from './ResponsesPanel';
 import SchedulePanel from './SchedulePanel';
 
 interface EventPageProps {
@@ -143,6 +145,13 @@ export default function EventPage({ eventId, onBack, onEditInvitation }: EventPa
                                         secondaryAction={
                                             <>
                                                 <IconButton
+                                                    aria-label={`Копирай личната връзка на ${guest.name}`}
+                                                    title="Копирай личната връзка на госта"
+                                                    onClick={() => void navigator.clipboard.writeText(guestShareUrlFor(guest.token))}
+                                                >
+                                                    <LinkIcon />
+                                                </IconButton>
+                                                <IconButton
                                                     aria-label={`${guest.name} е дете`}
                                                     aria-pressed={guest.isChild}
                                                     title={guest.isChild ? 'Отбележи като възрастен' : 'Отбележи като дете'}
@@ -158,7 +167,7 @@ export default function EventPage({ eventId, onBack, onEditInvitation }: EventPa
                                                 />
                                             </>
                                         }
-                                        sx={{ pr: 12 }}
+                                        sx={{ pr: 18 }}
                                     >
                                         <ListItemText
                                             primary={
@@ -231,6 +240,10 @@ export default function EventPage({ eventId, onBack, onEditInvitation }: EventPa
                     <SchedulePanel eventId={eventId} />
 
                     <CoownersPanel event={event} />
+
+                    <Box sx={{ gridColumn: { md: '1 / -1' } }}>
+                        <ResponsesPanel eventId={eventId} guests={guests} invitation={invitation ?? null} />
+                    </Box>
                 </Box>
             )}
 

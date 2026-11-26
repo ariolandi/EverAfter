@@ -6,17 +6,17 @@ import {
   type FormFields,
   type FormResponseInput,
   type GroupGuestAnswer,
-  type GroupResponse,
+  type GuestResponse,
   type Menu,
 } from '../../shared/types';
 import { SectionTitle } from '../components/SectionTitle';
-import { formatLongDate } from '../dates';
 import { ownAnswerLabel } from './answers';
 import AttendanceToggle from './AttendanceToggle';
 import ConfirmSubmitDialog from './ConfirmSubmitDialog';
 import FormCard from './FormCard';
 import GroupAnswer from './GroupAnswer';
 import SubmitSuccess from './SubmitSuccess';
+import GroupThanks from './GroupThanks';
 import { describeChoices, noChoices, type GuestChoices } from './guestChoices';
 import { useConfirmedSubmit } from './useConfirmedSubmit';
 
@@ -26,7 +26,7 @@ type RsvpFormProps = { fields: FormFields } & (
   | {
       /** Omitted for the invitation's general link: the guest types their own name. */
       guests?: undefined;
-      response?: undefined;
+      responses?: undefined;
       /** Omit to render a non-submittable preview. */
       onSubmit?: (response: FormResponseInput) => Promise<void>;
     }
@@ -48,8 +48,11 @@ type RsvpFormProps = { fields: FormFields } & (
       /** Attendance answers kept by the parent, so both parts of the form share them; omit to keep them here. */
       answers?: Record<number, boolean>;
       onAnswersChange?: (answers: Record<number, boolean>) => void;
-      /** The group's answer if it has already been sent; the form then only shows it. */
-      response: GroupResponse | null;
+      /**
+       * The recorded answers of guests who have already answered, by guest id. They are shown selected and
+       * locked; only the other guests answer, and once everyone has, the form thanks them instead of sending.
+       */
+      responses?: Record<number, GuestResponse>;
       /** Omit to render a non-submittable preview, as in the invitation builder. */
       onSubmit?: (answers: GroupGuestAnswer[]) => Promise<void>;
     }
@@ -69,7 +72,7 @@ export default function RsvpForm(props: RsvpFormProps) {
       part={props.part ?? 'all'}
       answers={props.answers}
       onAnswersChange={props.onAnswersChange}
-      response={props.response}
+      responses={props.responses ?? {}}
       onSubmit={props.onSubmit}
     />
   ) : (
@@ -146,7 +149,7 @@ function GroupForm({
   part,
   answers: controlledAnswers,
   onAnswersChange,
-  response,
+  responses,
   onSubmit,
 }: {
   fields: FormFields;
@@ -156,7 +159,7 @@ function GroupForm({
   part: GroupFormPart;
   answers?: Record<number, boolean>;
   onAnswersChange?: (answers: Record<number, boolean>) => void;
-  response: GroupResponse | null;
+  responses: Record<number, GuestResponse>;
   onSubmit?: (answers: GroupGuestAnswer[]) => Promise<void>;
 }) {
   const [ownAnswers, setOwnAnswers] = useState<Record<number, boolean>>({});
@@ -164,8 +167,11 @@ function GroupForm({
   const setAnswers = onAnswersChange ?? setOwnAnswers;
 
   const picked = choices ?? noChoices;
+  // Guests who have answered are locked to what was recorded; the others are still answering.
+  const pending = guests.filter((g) => !(g.id in responses));
+  const answerOf = (g: { id: number }) => (g.id in responses ? responses[g.id].answer : answers[g.id]);
   // Only guests who come choose a menu, accommodation and transport; they choose a menu only if one is meant for them.
-  const attends = (g: { id: number }) => !fields.showAnswer || answers[g.id] === true;
+  const attends = (g: { id: number }) => !fields.showAnswer || answerOf(g) === true;
   const picksMenu = (g: { id: number; isChild?: boolean }) =>
     choices !== undefined && attends(g) && menusForGuest(menus, g.isChild ?? false).length > 0;
   const picksLogistics = (g: { id: number }) => choices !== undefined && attends(g);
@@ -174,20 +180,21 @@ function GroupForm({
     return transport === undefined || transport === 'none' ? undefined : transport;
   };
   const complete =
-    guests.length > 0 &&
-    (!fields.showAnswer || guests.every((g) => g.id in answers)) &&
-    guests.every(
+    pending.length > 0 &&
+    (!fields.showAnswer || pending.every((g) => g.id in answers)) &&
+    pending.every(
       (g) =>
         (!picksMenu(g) || g.id in picked.menus) &&
         (!picksLogistics(g) || (g.id in picked.accommodation && transportOf(g) !== undefined)),
     );
-  const draft = guests.map((g) => ({
+  const draft = pending.map((g) => ({
     name: g.name,
     answer: fields.showAnswer ? (answers[g.id] ?? null) : null,
     extras: describeChoices(menus, {
       menuId: picksMenu(g) ? (picked.menus[g.id] ?? null) : null,
       accommodation: picksLogistics(g) ? (picked.accommodation[g.id] ?? null) : null,
       transport: picksLogistics(g) ? (picked.transport[g.id] ?? null) : null,
+      roomWith: picksLogistics(g) && picked.accommodation[g.id] ? (picked.roomWith[g.id] ?? null) : null,
     }),
   }));
   const submission = useConfirmedSubmit(
@@ -195,11 +202,12 @@ function GroupForm({
     onSubmit &&
       (() =>
         onSubmit(
-          guests.map((g) => ({
+          pending.map((g) => ({
             guestId: g.id,
             ...(fields.showAnswer && { answer: answers[g.id] }),
             ...(picksMenu(g) && { menuId: picked.menus[g.id] }),
             ...(picksLogistics(g) && { accommodation: picked.accommodation[g.id], transport: transportOf(g) }),
+            ...(picksLogistics(g) && picked.accommodation[g.id] && picked.roomWith[g.id]?.trim() && { roomWith: picked.roomWith[g.id].trim() }),
           })),
         )),
   );
@@ -212,32 +220,10 @@ function GroupForm({
     setAnswers(next);
   };
 
-  if (response) {
-    // The send button's page only confirms the send; the answer itself is shown with the attendance.
-    if (part === 'submit')
-      return submission.sent ? (
-        <FormCard>
-          <SubmitSuccess />
-        </FormCard>
-      ) : null;
-    return (
-      <FormCard>
-        <Stack spacing={1.5}>
-          {submission.sent ? (
-            <SubmitSuccess />
-          ) : (
-            <Alert severity="info">
-              Вече отговорихте на поканата на {formatLongDate(new Date(response.respondedAt))}.
-            </Alert>
-          )}
-          <Typography variant="subtitle2">Вашият отговор</Typography>
-          <GroupAnswer guests={response.guests.map((g) => ({ ...g, extras: describeChoices(menus, g) }))} />
-        </Stack>
-      </FormCard>
-    );
-  }
-
-  const submitControls = (
+  const allAnswered = guests.length > 0 && pending.length === 0;
+  const submitControls = allAnswered ? (
+    <GroupThanks plural={guests.length > 1} />
+  ) : (
     <>
       {submission.error && <Alert severity="error">{submission.error}</Alert>}
       <Button type="submit" variant="contained" disabled={!onSubmit || !complete || submitting}>
@@ -256,7 +242,7 @@ function GroupForm({
 
   if (part === 'submit') {
     return (
-      <FormCard onSubmit={submission.review}>
+      <FormCard onSubmit={allAnswered ? undefined : submission.review}>
         <Stack spacing={1.5}>{submitControls}</Stack>
         {dialog}
       </FormCard>
@@ -266,7 +252,7 @@ function GroupForm({
   return (
     <>
       <SectionTitle>{`${guests.length > 1 ? 'Отбележете' : 'Отбележи'} своя отговор`}</SectionTitle>
-      <FormCard onSubmit={part === 'all' ? submission.review : undefined}>
+      <FormCard onSubmit={part === 'all' && !allAnswered ? submission.review : undefined}>
         <Stack spacing={1.5}>
           {guests.length === 0 && <Alert severity="warning">В тази покана все още няма гости.</Alert>}
           {guests.map((guest) => (
@@ -277,9 +263,9 @@ function GroupForm({
               {fields.showAnswer && (
                 <AttendanceToggle
                   aria-label={`Отговор за ${guest.name}`}
-                  value={answers[guest.id] ?? null}
+                  value={answerOf(guest) ?? null}
                   onChange={(answer) => setAnswer(guest.id, answer)}
-                  disabled={submitting}
+                  disabled={submitting || guest.id in responses}
                 />
               )}
             </Stack>

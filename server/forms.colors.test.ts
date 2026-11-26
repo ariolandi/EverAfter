@@ -34,6 +34,8 @@ const body = {
   primaryColor: 2,
   secondaryColor: 0,
   invitationText: '',
+  accommodationNotes: '',
+  transportNotes: '',
   dressCode: 'cocktail',
   colorUsage: 'informative',
 };

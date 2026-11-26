@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import type { ColorUsage, DressCode, Transport } from '../shared/types.js';
 import {
   boolean,
@@ -10,6 +11,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
@@ -115,6 +117,8 @@ export const guests = pgTable(
     // A guest is in at most one group; deleting the group keeps the guest on the list.
     groupId: integer('group_id').references(() => guestGroups.id, { onDelete: 'set null' }),
     name: text('name').notNull(),
+    // Opens the guest's own invitation link, whether or not they are in a group.
+    token: text('token').notNull().unique(),
     isChild: boolean('is_child').notNull().default(false),
     createdAt: createdAt(),
   },
@@ -178,6 +182,8 @@ export const forms = pgTable('forms', {
   primaryColor: integer('primary_color').notNull().default(0),
   secondaryColor: integer('secondary_color').notNull().default(0),
   invitationText: text('invitation_text').notNull().default(''),
+  accommodationNotes: text('accommodation_notes').notNull().default(''),
+  transportNotes: text('transport_notes').notNull().default(''),
   dressCode: text('dress_code').$type<DressCode>().notNull().default('cocktail'),
   colorUsage: text('color_usage').$type<ColorUsage>().notNull().default('informative'),
   createdAt: createdAt(),
@@ -201,7 +207,16 @@ export const formResponses = pgTable(
     // Set for guests who come: whether they use the accommodation, and how they travel.
     accommodation: boolean('accommodation'),
     transport: text('transport').$type<Transport>(),
+    // Who the guest would like to share a room with, if they said.
+    roomWith: text('room_with'),
     createdAt: createdAt(),
   },
-  (t) => [index('form_responses_form_id').on(t.formId), index('form_responses_group_id').on(t.groupId)],
+  (t) => [
+    index('form_responses_form_id').on(t.formId),
+    index('form_responses_group_id').on(t.groupId),
+    // A guest answers an invitation once, whichever link they answer from.
+    uniqueIndex('form_responses_form_guest')
+      .on(t.formId, t.guestId)
+      .where(sql`${t.guestId} is not null`),
+  ],
 );

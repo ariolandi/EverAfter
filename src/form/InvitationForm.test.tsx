@@ -38,7 +38,7 @@ describe('InvitationForm', () => {
                 details={details}
                 imageUrl={null}
                 guestNames={['Петър']}
-                responseForm={<RsvpForm fields={form} guests={[{ id: 1, name: 'Петър Петров' }]} response={null} />}
+                responseForm={<RsvpForm fields={form} guests={[{ id: 1, name: 'Петър Петров' }]} />}
             />,
         );
         expect(screen.getByText('Петър Петров')).toHaveStyle({ color: '#654321' });

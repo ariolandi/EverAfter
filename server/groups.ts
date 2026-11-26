@@ -1,109 +1,94 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { HttpStatus } from '../shared/httpStatus.js';
-import { menusForGuest, TRANSPORT_OPTIONS, type GroupInvitation, type Transport } from '../shared/types.js';
-import { createGroupResponse, getGroupInvitation } from './db.js';
+import type { GroupInvitation } from '../shared/types.js';
+import { createGuestResponses, getGroupInvitation, getGuestInvitation, type InvitationRecord } from './db.js';
+import { parseGuestAnswer } from './responses.js';
 
-/** Public routes behind a group's personal invitation link: anyone with the token can view and answer once. */
-export const groupRouter = Router();
-
-groupRouter.get('/:token', async (req, res) => {
-  const found = await getGroupInvitation(req.params.token);
-  if (!found) {
-    res.status(HttpStatus.NOT_FOUND).json({ error: 'invitation not found' });
-    return;
-  }
-  if (!found.form) {
-    res.status(HttpStatus.NOT_FOUND).json({ error: 'the invitation has not been published yet' });
-    return;
-  }
-  const invitation: GroupInvitation = {
-    form: found.form.form,
+function toInvitation(found: InvitationRecord): GroupInvitation {
+  return {
+    form: found.form!.form,
     schedule: found.schedule,
-    groupName: found.groupName,
+    groupName: found.name,
     guests: found.guests,
     menus: found.menus,
-    response: found.response,
   };
-  res.json(invitation);
-});
+}
 
-groupRouter.post('/:token/responses', async (req, res) => {
-  const found = await getGroupInvitation(req.params.token);
-  if (!found?.form) {
-    res.status(HttpStatus.NOT_FOUND).json({ error: 'invitation not found' });
-    return;
-  }
-  if (found.response) {
-    res.status(HttpStatus.CONFLICT).json({ error: 'this invitation has already been answered' });
-    return;
-  }
-  const { form } = found.form;
-  const answers: unknown = req.body?.answers;
-  if (!Array.isArray(answers)) {
-    res.status(HttpStatus.BAD_REQUEST).json({ error: 'answers are required' });
-    return;
-  }
-  const byGuest = new Map<unknown, unknown>(answers.map((a) => [a?.guestId, a?.answer]));
-  // Exactly one answer per guest in the group, so nobody is skipped or answered for twice.
-  if (
-    found.guests.length === 0 ||
-    byGuest.size !== answers.length ||
-    answers.length !== found.guests.length ||
-    !found.guests.every((g) => byGuest.has(g.id))
-  ) {
-    res.status(HttpStatus.BAD_REQUEST).json({ error: 'answer for every guest in the group' });
-    return;
-  }
-  if (form.showAnswer && !found.guests.every((g) => typeof byGuest.get(g.id) === 'boolean')) {
-    res.status(HttpStatus.BAD_REQUEST).json({ error: 'please answer yes or no for every guest' });
-    return;
-  }
-  const menuByGuest = new Map<unknown, unknown>(answers.map((a) => [a?.guestId, a?.menuId]));
-  const accommodationByGuest = new Map<unknown, unknown>(answers.map((a) => [a?.guestId, a?.accommodation]));
-  const transportByGuest = new Map<unknown, unknown>(answers.map((a) => [a?.guestId, a?.transport]));
-  const picks: { menuId: number | null; accommodation: boolean | null; transport: Transport | null }[] = [];
-  for (const guest of found.guests) {
-    const attending = !form.showAnswer || byGuest.get(guest.id) === true;
-    const options = menusForGuest(found.menus, guest.isChild);
-    const menuId = menuByGuest.get(guest.id);
-    // Only guests who come choose a menu, and only from the ones meant for them: children's menus are for children.
-    if (!attending) {
-      picks.push({ menuId: null, accommodation: null, transport: null });
-      continue;
+function personalLinkRouter(load: (token: string) => Promise<InvitationRecord | undefined>) {
+  const router = Router();
+
+  /** The link's invitation, or responds 404 and returns undefined while it is unknown or unpublished. */
+  async function find(req: Request<{ token: string }>, res: Response) {
+    const found = await load(req.params.token);
+    if (!found) {
+      res.status(HttpStatus.NOT_FOUND).json({ error: 'invitation not found' });
+      return undefined;
     }
-    if (options.length > 0 && !options.some((menu) => menu.id === menuId)) {
-      res.status(HttpStatus.BAD_REQUEST).json({ error: `pick a menu for ${guest.name}` });
+    if (!found.form) {
+      res.status(HttpStatus.NOT_FOUND).json({ error: 'the invitation has not been published yet' });
+      return undefined;
+    }
+    return found;
+  }
+
+  router.get('/:token', async (req, res) => {
+    const found = await find(req, res);
+    if (found) res.json(toInvitation(found));
+  });
+
+  router.post('/:token/responses', async (req, res) => {
+    const found = await find(req, res);
+    if (!found) return;
+    const { form } = found.form!;
+    const pending = found.guests.filter((g) => !g.response);
+    if (pending.length === 0) {
+      res.status(HttpStatus.CONFLICT).json({ error: 'this invitation has already been answered' });
       return;
     }
-    const accommodation = accommodationByGuest.get(guest.id);
-    if (typeof accommodation !== 'boolean') {
-      res.status(HttpStatus.BAD_REQUEST).json({ error: `say whether ${guest.name} needs accommodation` });
+    const answers: unknown = req.body?.answers;
+    if (!Array.isArray(answers)) {
+      res.status(HttpStatus.BAD_REQUEST).json({ error: 'answers are required' });
       return;
     }
-    const transport = transportByGuest.get(guest.id);
-    if (!TRANSPORT_OPTIONS.includes(transport as Transport)) {
-      res.status(HttpStatus.BAD_REQUEST).json({ error: `say how ${guest.name} travels` });
+    const byGuest = new Map<unknown, Record<string, unknown>>(answers.map((a) => [a?.guestId, a ?? {}]));
+    // Exactly one answer per guest who has not answered yet, so nobody is skipped or answered for twice.
+    if (
+      byGuest.size !== answers.length ||
+      answers.length !== pending.length ||
+      !pending.every((g) => byGuest.has(g.id))
+    ) {
+      res.status(HttpStatus.BAD_REQUEST).json({ error: 'answer for every guest who has not answered yet' });
       return;
     }
-    picks.push({
-      menuId: options.length > 0 ? (menuId as number) : null,
-      accommodation,
-      transport: transport as Transport,
-    });
-  }
-  const response = await createGroupResponse(
-    found.form.id,
-    found.groupId,
-    found.guests.map((g, i) => ({
-      guestId: g.id,
-      name: g.name,
-      answer: form.showAnswer ? (byGuest.get(g.id) as boolean) : null,
-      ...picks[i],
-    })),
-  );
-  if (!response) {
-    res.status(HttpStatus.CONFLICT).json({ error: 'this invitation has already been answered' });
-    return;
-  }
-  res.status(HttpStatus.CREATED).json(response);
-});
+    const rows = [];
+    for (const guest of pending) {
+      const parsed = parseGuestAnswer(
+        guest,
+        { showAnswer: form.showAnswer, menus: found.menus },
+        byGuest.get(guest.id)!,
+      );
+      if (!parsed.ok) {
+        res.status(HttpStatus.BAD_REQUEST).json({ error: parsed.error });
+        return;
+      }
+      rows.push({ guestId: guest.id, name: guest.name, ...parsed.values });
+    }
+    if (!(await createGuestResponses(found.form!.id, found.groupId, rows))) {
+      res.status(HttpStatus.CONFLICT).json({ error: 'this invitation has already been answered' });
+      return;
+    }
+    // The page carries on from what is now recorded.
+    const updated = await load(req.params.token);
+    res.status(HttpStatus.CREATED).json(toInvitation(updated!));
+  });
+
+  return router;
+}
+
+/**
+ * Public routes behind a personal invitation link, a group's (/api/groups/:token) or a single guest's
+ * (/api/guests/:token): anyone with the token can view the invitation and answer for the guests who have not
+ * answered yet. A guest's answer can't be changed from the link afterwards.
+ */
+export const groupRouter = personalLinkRouter(getGroupInvitation);
+export const guestRouter = personalLinkRouter(getGuestInvitation);

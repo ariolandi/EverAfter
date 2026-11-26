@@ -73,6 +73,8 @@ export default function GuestGroupsPanel({ eventId, guests, groups, onGroupsChan
             ) : (
                 groups.map((group) => {
                     const answers = new Map(group.response?.guests.map((g) => [g.guestId, g.answer]));
+                    // A group is answered once every guest has, from the group's link or their own.
+                    const groupAnswered = group.response !== null && group.response.guests.length >= group.guestIds.length;
                     return (
                         <ItemCard
                             key={group.id}
@@ -80,8 +82,8 @@ export default function GuestGroupsPanel({ eventId, guests, groups, onGroupsChan
                             badge={
                                 <Chip
                                     size="small"
-                                    color={group.response ? 'success' : 'default'}
-                                    label={group.response ? 'Отговорили' : 'Очаква отговор'}
+                                    color={groupAnswered ? 'success' : 'default'}
+                                    label={groupAnswered ? 'Отговорили' : 'Очаква отговор'}
                                 />
                             }
                             onEdit={() => setEditing(group)}

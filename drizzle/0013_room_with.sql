@@ -1,0 +1,1 @@
+ALTER TABLE "form_responses" ADD COLUMN "room_with" text;

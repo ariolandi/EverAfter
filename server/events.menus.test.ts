@@ -28,7 +28,7 @@ const event: EventInfo = {
   ownerName: 'Ана',
 };
 
-const child: Guest = { id: 5, name: 'Ники', groupId: null, isChild: true, createdAt: '2026-11-01T10:00:00.000Z' };
+const child: Guest = { id: 5, name: 'Ники', groupId: null, token: 'guest-token', isChild: true, createdAt: '2026-11-01T10:00:00.000Z' };
 
 const menu: Menu = {
   id: 20,
@@ -52,13 +52,13 @@ describe('child guests', () => {
     vi.mocked(createGuest).mockResolvedValue(child);
     const res = await request(app).post('/api/events/1/guests').send({ name: ' Ники ', isChild: true });
     expect(res.status).toBe(HttpStatus.CREATED);
-    expect(createGuest).toHaveBeenCalledWith(1, 'Ники', true);
+    expect(createGuest).toHaveBeenCalledWith(1, 'Ники', true, expect.any(String));
   });
 
   it('adds an adult when isChild is left out', async () => {
     vi.mocked(createGuest).mockResolvedValue({ ...child, isChild: false });
     await request(app).post('/api/events/1/guests').send({ name: 'Ана' });
-    expect(createGuest).toHaveBeenCalledWith(1, 'Ана', false);
+    expect(createGuest).toHaveBeenCalledWith(1, 'Ана', false, expect.any(String));
   });
 
   it('rejects an isChild that is not a boolean', async () => {

@@ -14,6 +14,7 @@ import {
   type ScheduleItemInput,
 } from '../shared/types.js';
 import { requireUser } from './auth.js';
+import { parseGuestAnswer } from './responses.js';
 import {
   addCoowner,
   areEventGuests,
@@ -34,8 +35,10 @@ import {
   listGroups,
   listGuests,
   listMenus,
+  listResponses,
   listScheduleItems,
   normalizeEmail,
+  saveGuestResponse,
   setGuestIsChild,
   updateGroup,
   updateMenu,
@@ -148,7 +151,9 @@ eventRouter.post('/:id/guests', async (req, res) => {
     res.status(HttpStatus.BAD_REQUEST).json({ error: 'isChild must be a boolean' });
     return;
   }
-  res.status(HttpStatus.CREATED).json(await createGuest(event.id, name, isChild));
+  res
+    .status(HttpStatus.CREATED)
+    .json(await createGuest(event.id, name, isChild, crypto.randomBytes(9).toString('base64url')));
 });
 
 eventRouter.patch('/:id/guests/:guestId', async (req, res) => {
@@ -166,6 +171,39 @@ eventRouter.patch('/:id/guests/:guestId', async (req, res) => {
     return;
   }
   res.json(guest);
+});
+
+eventRouter.get('/:id/responses', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (event) res.json(await listResponses(event.id));
+});
+
+// Organizers can record or correct a guest's answer; it must be as complete as one the guest sends.
+eventRouter.put('/:id/guests/:guestId/response', async (req, res) => {
+  const event = await findEvent(req, res);
+  if (!event) return;
+  const form = event.invitation;
+  if (!form) {
+    res.status(HttpStatus.CONFLICT).json({ error: 'the event has no invitation to answer yet' });
+    return;
+  }
+  const guestId = Number(req.params.guestId);
+  const guest = Number.isInteger(guestId) ? (await listGuests(event.id)).find((g) => g.id === guestId) : undefined;
+  if (!guest) {
+    res.status(HttpStatus.NOT_FOUND).json({ error: 'guest not found' });
+    return;
+  }
+  const parsed = parseGuestAnswer(
+    guest,
+    { showAnswer: form.showAnswer, menus: await listMenus(event.id) },
+    req.body ?? {},
+  );
+  if (!parsed.ok) {
+    res.status(HttpStatus.BAD_REQUEST).json({ error: parsed.error });
+    return;
+  }
+  await saveGuestResponse(event.id, guest.id, parsed.values);
+  res.status(HttpStatus.NO_CONTENT).end();
 });
 
 /** Validates a group body, or responds 400 and returns undefined. Every guest must belong to the event. */

@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { GroupInvitation } from '../../shared/types';
+import type { GroupInvitation, GuestResponse, InvitedGuest } from '../../shared/types';
 import { api } from '../api';
 import { menu, publishedForm } from '../test/fixtures';
 import { renderWithTheme } from '../test/render';
@@ -8,16 +8,28 @@ import GroupInvite from './GroupInvite';
 
 vi.mock('../api');
 
+const guest = (id: number, name: string, isChild = false, response: GuestResponse | null = null): InvitedGuest => ({
+  id,
+  name,
+  isChild,
+  response,
+});
+
+const recorded = (overrides: Partial<GuestResponse> = {}): GuestResponse => ({
+  respondedAt: '2026-11-19T10:00:00.000Z',
+  answer: true,
+  menuId: null,
+  accommodation: true,
+  transport: 'own',
+  ...overrides,
+});
+
 const invitation = (overrides: Partial<GroupInvitation> = {}): GroupInvitation => ({
   form: publishedForm(),
   schedule: [],
   groupName: 'Семейство Иванови',
-  guests: [
-    { id: 1, name: 'Иван Иванов', isChild: false },
-    { id: 2, name: 'Мария Иванова', isChild: false },
-  ],
+  guests: [guest(1, 'Иван Иванов'), guest(2, 'Мария Иванова')],
   menus: [],
-  response: null,
   ...overrides,
 });
 
@@ -50,13 +62,14 @@ describe('GroupInvite', () => {
 
   it('sends the answer, then shows the success message and the answer', async () => {
     vi.mocked(api.getGroupInvitation).mockResolvedValue(invitation());
-    vi.mocked(api.submitGroupResponse).mockResolvedValue({
-      respondedAt: '2026-11-19T10:00:00.000Z',
-      guests: [
-        { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null, accommodation: null, transport: null },
-        { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null, accommodation: null, transport: null },
-      ],
-    });
+    vi.mocked(api.submitGroupResponse).mockResolvedValue(
+      invitation({
+        guests: [
+          guest(1, 'Иван Иванов', false, recorded({ accommodation: false, transport: 'arrangesOwn' })),
+          guest(2, 'Мария Иванова', false, recorded({ answer: false, accommodation: null, transport: null })),
+        ],
+      }),
+    );
     const { user } = renderWithTheme(<GroupInvite token="grp-token" />);
 
     const ivan = await screen.findByRole('group', { name: 'Отговор за Иван Иванов' });
@@ -95,44 +108,109 @@ describe('GroupInvite', () => {
         { guestId: 2, answer: false },
       ],
     });
-    expect(await screen.findByText('Отговорът е изпратен успешно!')).toBeInTheDocument();
-    expect(screen.getByText('Вашият отговор')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Благодарим ви! Можете да преглеждате информацията по всяко време, както и своите отговори.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Изпрати' })).not.toBeInTheDocument();
+    // The invitation is now read-only, with what was sent selected.
+    expect(
+      within(screen.getByRole('group', { name: 'Отговор за Иван Иванов' })).getByRole('button', { name: 'Ще присъства' }),
+    ).toBeDisabled();
   });
 
-  it('opens the recorded answer when the group has already answered', async () => {
+  it('opens the invitation read-only with the recorded answers selected once the guests have answered', async () => {
     vi.mocked(api.getGroupInvitation).mockResolvedValue(
       invitation({
-        response: {
-          respondedAt: '2026-11-19T10:00:00.000Z',
-          guests: [
-            { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null, accommodation: null, transport: null },
-            { guestId: 2, name: 'Мария Иванова', answer: true, menuId: null, accommodation: null, transport: null },
-          ],
-        },
+        menus: [menu()],
+        guests: [
+          guest(1, 'Иван Иванов', false, recorded({ menuId: 20, accommodation: true, transport: 'needsHelp' })),
+          guest(2, 'Мария Иванова', false, recorded({ answer: false, accommodation: null, transport: null })),
+        ],
       }),
     );
     renderWithTheme(<GroupInvite token="grp-token" />);
 
-    expect(await screen.findByText(/Вече отговорихте на поканата/)).toBeInTheDocument();
-    expect(screen.getAllByText('Ще присъства')).toHaveLength(2);
+    // It opens on the cover like any other visit, not on a summary of the answer.
+    expect(await screen.findByText('Иван и Мария')).toBeInTheDocument();
+    const ivan = screen.getByRole('group', { name: 'Отговор за Иван Иванов' });
+    expect(within(ivan).getByRole('button', { name: 'Ще присъства' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(ivan).getByRole('button', { name: 'Ще присъства' })).toBeDisabled();
+    expect(
+      within(screen.getByRole('group', { name: 'Отговор за Мария Иванова' })).getByRole('button', {
+        name: 'Няма да присъства',
+      }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      within(screen.getByRole('group', { name: 'Нощувка за Иван Иванов' })).getByRole('button', {
+        name: 'Ще се възползвам',
+      }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      within(screen.getByRole('group', { name: 'Помощ с превоза за Иван Иванов' })).getByRole('button', {
+        name: 'Бих се възползвал от помощ',
+      }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByRole('combobox', { name: 'Меню' })[0]).toHaveTextContent('Класическо меню');
+    expect(screen.getByText(/Благодарим ви!/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Изпрати' })).not.toBeInTheDocument();
+  });
+
+  it('lets the guests who have not answered yet answer from the group link', async () => {
+    vi.mocked(api.getGroupInvitation).mockResolvedValue(
+      invitation({ guests: [guest(1, 'Иван Иванов', false, recorded()), guest(2, 'Мария Иванова')] }),
+    );
+    vi.mocked(api.submitGroupResponse).mockResolvedValue(invitation());
+    const { user } = renderWithTheme(<GroupInvite token="grp-token" />);
+
+    await user.click(
+      within(await screen.findByRole('group', { name: 'Отговор за Мария Иванова' })).getByRole('button', {
+        name: 'Няма да присъства',
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Изпрати' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Потвърди и изпрати' }));
+
+    expect(api.submitGroupResponse).toHaveBeenCalledWith('grp-token', { answers: [{ guestId: 2, answer: false }] });
+  });
+
+  it('opens a single guest own link and sends their answer to it', async () => {
+    vi.mocked(api.getGuestInvitation).mockResolvedValue(invitation({ guests: [guest(1, 'Иван Иванов')] }));
+    vi.mocked(api.submitGuestResponse).mockResolvedValue(
+      invitation({ guests: [guest(1, 'Иван Иванов', false, recorded())] }),
+    );
+    const { user } = renderWithTheme(<GroupInvite token="guest-token" kind="guest" />);
+
+    expect(api.getGroupInvitation).not.toHaveBeenCalled();
+    await user.click(
+      within(await screen.findByRole('group', { name: 'Отговор за Иван Иванов' })).getByRole('button', {
+        name: 'Ще присъства',
+      }),
+    );
+    await pickLogistics(user, 'Иван Иванов');
+    await user.click(screen.getByRole('button', { name: 'Изпрати' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Потвърди и изпрати' }));
+
+    expect(api.submitGuestResponse).toHaveBeenCalledWith('guest-token', {
+      answers: [{ guestId: 1, answer: true, accommodation: true, transport: 'own' }],
+    });
+    expect(
+      await screen.findByText('Благодарим ти! Можеш да преглеждаш информацията по всяко време, както и своите отговори.'),
+    ).toBeInTheDocument();
   });
 
   it('shows the menus page and lets only children pick the children’s menu', async () => {
     vi.mocked(api.getGroupInvitation).mockResolvedValue(
       invitation({
         guests: [
-          { id: 1, name: 'Иван Иванов', isChild: false },
-          { id: 2, name: 'Ники Иванов', isChild: true },
+          guest(1, 'Иван Иванов'),
+          guest(2, 'Ники Иванов', true),
         ],
         menus: [menu(), menu({ id: 21, name: 'Детско меню', isChild: true })],
       }),
     );
-    vi.mocked(api.submitGroupResponse).mockResolvedValue({
-      respondedAt: '2026-11-19T10:00:00.000Z',
-      guests: [],
-    });
+    vi.mocked(api.submitGroupResponse).mockResolvedValue(invitation());
     const { user } = renderWithTheme(<GroupInvite token="grp-token" />);
 
     // The menus page shows every menu with its dishes.

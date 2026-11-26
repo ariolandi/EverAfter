@@ -58,6 +58,10 @@ export interface InvitationDetails extends InvitationColors {
   place: string;
   /** Free text of the invitation, shown on its first page; '' when not set. */
   invitationText: string;
+  /** Organiser's note shown above the choices on the accommodation page; '' when not set. */
+  accommodationNotes: string;
+  /** Organiser's note shown above the choices on the transport page; '' when not set. */
+  transportNotes: string;
   /** Dress code shown on the invitation's schedule page. */
   dressCode: DressCode;
   /** Whether guests must, are advised to, or are just told about wearing the colours. */
@@ -66,8 +70,14 @@ export interface InvitationDetails extends InvitationColors {
 
 export const MAX_INVITATION_TEXT_LENGTH = 2000;
 
+/** Longest note on the accommodation or transport page. */
+export const MAX_NOTES_LENGTH = 1000;
+
 /** Longest name of a person, event, group or menu. */
 export const MAX_NAME_LENGTH = 100;
+
+/** Longest name of who a guest would like to share a room with. */
+export const MAX_ROOM_WITH_LENGTH = MAX_NAME_LENGTH;
 
 export const MAX_PLACE_LENGTH = 200;
 
@@ -120,6 +130,8 @@ export interface Guest {
   name: string;
   /** The group the guest is invited with, or null when they aren't in one. */
   groupId: number | null;
+  /** Opens the guest's own invitation link, /i/<token>. */
+  token: string;
   /** Children are shown apart from adults and are meant for the event's children's menus. */
   isChild: boolean;
   createdAt: string;
@@ -177,7 +189,7 @@ export interface FormResponseInput {
   answer?: boolean;
 }
 
-/** One guest's answer sent from a group link. */
+/** One guest's answer, sent from a group's link or their own, or entered by an organizer. */
 /**
  * How a guest gets to the event: with their own transport, or without it and either wanting the organizers' help
  * or arranging it themselves.
@@ -195,6 +207,8 @@ export interface GroupGuestAnswer {
   accommodation?: boolean;
   /** How the guest travels; required when the guest comes. */
   transport?: Transport;
+  /** Name of who the guest would like to share a room with; only asked of guests invited on their own. */
+  roomWith?: string;
 }
 
 export interface GroupResponseInput {
@@ -215,7 +229,19 @@ export interface GroupGuestResponse {
   transport: Transport | null;
 }
 
-/** A group's answer, once it has been sent. */
+/** A guest's recorded answer. Fields that don't apply (a guest who doesn't come picks no menu) are null. */
+export interface GuestResponse {
+  respondedAt: string;
+  /** Null when the invitation doesn't ask whether the guest will attend. */
+  answer: boolean | null;
+  menuId: number | null;
+  accommodation: boolean | null;
+  transport: Transport | null;
+  /** Who the guest would like to share a room with; null when not given. */
+  roomWith?: string | null;
+}
+
+/** A group's answers, as far as its guests have answered. */
 export interface GroupResponse {
   respondedAt: string;
   guests: GroupGuestResponse[];
@@ -228,7 +254,7 @@ export interface GuestGroup {
   /** Opens the group's personal invitation link, /g/<token>. */
   token: string;
   guestIds: number[];
-  /** Null until the group answers the invitation. */
+  /** Null until one of the group's guests has answered the invitation. */
   response: GroupResponse | null;
   createdAt: string;
 }
@@ -238,13 +264,37 @@ export interface GuestGroupInput {
   guestIds: number[];
 }
 
-/** What a group's personal link shows: the invitation, who it is for, and their answer if already sent. */
+/** A guest an invitation link is addressed to, with their answer once it has been sent. */
+export interface InvitedGuest {
+  id: number;
+  name: string;
+  isChild: boolean;
+  response: GuestResponse | null;
+}
+
+/**
+ * What a personal link (a group's, or a single guest's) shows: the invitation, who it is for and their answers.
+ * Guests who have answered are shown read-only; the rest can still answer.
+ */
 export interface GroupInvitation {
   form: PublishedForm;
   schedule: ScheduleItem[];
+  /** The group's name, or the guest's own name on their personal link. */
   groupName: string;
-  guests: { id: number; name: string; isChild: boolean }[];
+  guests: InvitedGuest[];
   /** The event's menus, for the menus page and for each guest to pick from. */
   menus: Menu[];
-  response: GroupResponse | null;
 }
+
+/** One line of the organizers' table of answers: a guest and their answer, or a general-link answer without a guest. */
+export interface ResponseEntry {
+  /** Null for an answer sent from the invitation's general link, where the guest typed their own name. */
+  guestId: number | null;
+  name: string;
+  groupName: string | null;
+  /** Null while the guest hasn't answered. */
+  response: GuestResponse | null;
+}
+
+/** What an organizer enters to record or change a guest's answer. */
+export type GuestResponseInput = Omit<GroupGuestAnswer, 'guestId'>;

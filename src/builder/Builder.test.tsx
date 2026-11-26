@@ -12,6 +12,7 @@ const guest = (id: number, name: string): Guest => ({
     id,
     name,
     groupId: null,
+    token: `guest-token-${id}`,
     isChild: false,
     createdAt: '2026-11-01T10:00:00.000Z',
 });
@@ -62,6 +63,8 @@ describe('Builder', () => {
                 primaryColor: 0,
                 secondaryColor: 1,
                 invitationText: '',
+                accommodationNotes: '',
+                transportNotes: '',
                 dressCode: 'cocktail',
                 colorUsage: 'informative',
             },
@@ -117,7 +120,7 @@ describe('Builder', () => {
 
         await user.click(screen.getByRole('button', { name: 'Напред' }));
         expect(api.updateForm).toHaveBeenCalledTimes(2);
-        expect(await screen.findByText(/Все още няма групи гости/)).toBeInTheDocument();
+        expect(await screen.findByRole('tab', { name: /Гости/, selected: true })).toBeInTheDocument();
     });
 
     it('saves the dress code and how strictly the colours apply', async () => {
@@ -159,13 +162,16 @@ describe('Builder', () => {
         ]);
         const { user } = renderWithTheme(<Builder eventId={1} onBack={vi.fn()} />);
 
+        // The first group is greeted by default; its answer form shows on the guests step.
         await user.click(await screen.findByRole('tab', { name: /Гости/ }));
         expect(screen.queryByLabelText('Describe the image')).not.toBeInTheDocument();
-        // The first group is previewed: it is selected in the list and fills in the answer form.
-        expect(screen.getByRole('button', { name: /Иван и Мария/ })).toHaveClass('Mui-selected');
         expect(screen.getByRole('group', { name: 'Отговор за Иван' })).toBeInTheDocument();
 
-        await user.click(screen.getByRole('button', { name: /Петър/ }));
+        // Another group is picked on the first step and previewed on the guests step.
+        await user.click(screen.getByRole('tab', { name: /Основна информация/ }));
+        await user.click(screen.getByRole('combobox', { name: 'Покана за' }));
+        await user.click(screen.getByRole('option', { name: /Петър/ }));
+        await user.click(screen.getByRole('tab', { name: /Гости/ }));
         expect(screen.getByRole('group', { name: 'Отговор за Петър' })).toBeInTheDocument();
         expect(screen.queryByRole('group', { name: 'Отговор за Иван' })).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Изпрати' })).toBeDisabled();
@@ -208,7 +214,8 @@ describe('Builder', () => {
         // On the guests step they answer by name, like a group of one, instead of typing their name in.
         await user.click(screen.getByRole('tab', { name: /Гости/ }));
         expect(screen.getByRole('group', { name: 'Отговор за Петър Петров' })).toBeInTheDocument();
-        expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+        // (The accommodation page's room-sharing field is previewed for a single guest, so it is not a name field.)
+        expect(screen.queryByRole('textbox', { name: /^(?!С кого)/ })).not.toBeInTheDocument();
     });
 
     it('shows the error when loading fails', async () => {

@@ -1,5 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Alert, Box, Button, Divider, Snackbar, Stack, Step, StepButton, Stepper, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  Divider,
+  Snackbar,
+  Stack,
+  Step,
+  StepButton,
+  Stepper,
+  TextField,
+  Typography,
+} from '@mui/material';
 import type {
   InvitationColors,
   InvitationDetails,
@@ -9,6 +21,7 @@ import type {
   Menu,
   ScheduleItem,
 } from '../../shared/types';
+import { MAX_NOTES_LENGTH } from '../../shared/types';
 import { api } from '../api';
 import BackButton from '../components/BackButton';
 import { errorMessage } from '../errors';
@@ -78,6 +91,8 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
     place: '',
     ...DEFAULT_COLORS,
     invitationText: '',
+    accommodationNotes: '',
+    transportNotes: '',
     dressCode: 'cocktail',
     colorUsage: 'informative',
   });
@@ -137,6 +152,8 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
             primaryColor: invitation.primaryColor,
             secondaryColor: invitation.secondaryColor,
             invitationText: invitation.invitationText,
+            accommodationNotes: invitation.accommodationNotes,
+            transportNotes: invitation.transportNotes,
             dressCode: invitation.dressCode,
             colorUsage: invitation.colorUsage,
           });
@@ -249,16 +266,38 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
         )}
 
         {activeStep === steps.accommodation && (
-          <Typography color="text.secondary">
-            Всеки гост отговаря дали ще се възползва от нощувка. Прегледайте страницата с избрана група или гост.
-          </Typography>
+          <Stack spacing={2}>
+            <Typography color="text.secondary">
+              Всеки гост отговаря дали ще се възползва от нощувка. Прегледайте страницата с избрана група или гост.
+            </Typography>
+            <TextField
+              label="Бележка за нощувките"
+              helperText="Показва се най-горе на страницата, над избора."
+              multiline
+              minRows={3}
+              value={details.accommodationNotes}
+              onChange={(e) => setDetails((current) => ({ ...current, accommodationNotes: e.target.value }))}
+              slotProps={{ htmlInput: { maxLength: MAX_NOTES_LENGTH } }}
+            />
+          </Stack>
         )}
 
         {activeStep === steps.transport && (
-          <Typography color="text.secondary">
-            Всеки гост казва дали има собствен превоз, а ако няма – дали би се възползвал от помощ. Това е последната
-            страница на поканата, с бутона за изпращане.
-          </Typography>
+          <Stack spacing={2}>
+            <Typography color="text.secondary">
+              Всеки гост казва дали има собствен превоз, а ако няма – дали би се възползвал от помощ. Това е последната
+              страница на поканата, с бутона за изпращане.
+            </Typography>
+            <TextField
+              label="Бележка за превоза"
+              helperText="Показва се най-горе на страницата, над избора."
+              multiline
+              minRows={3}
+              value={details.transportNotes}
+              onChange={(e) => setDetails((current) => ({ ...current, transportNotes: e.target.value }))}
+              slotProps={{ htmlInput: { maxLength: MAX_NOTES_LENGTH } }}
+            />
+          </Stack>
         )}
 
         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
@@ -331,10 +370,15 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
               ...(hasMenus
                 ? [<MenuChoice key="menu" guests={selectedGuests} menus={menus} choices={noChoices.menus} />]
                 : []),
-              <AccommodationChoice key="accommodation" guests={selectedGuests} choices={{}} />,
+              <AccommodationChoice
+                key="accommodation"
+                guests={selectedGuests}
+                notes={details.accommodationNotes}
+                choices={{}}
+              />,
               <Stack key="transport" spacing={2}>
-                <TransportChoice guests={selectedGuests} choices={{}} />
-                <RsvpForm fields={fields} guests={selectedGuests} response={null} choices={noChoices} part="submit" />
+                <TransportChoice guests={selectedGuests} notes={details.transportNotes} choices={{}} />
+                <RsvpForm fields={fields} guests={selectedGuests} choices={noChoices} part="submit" />
               </Stack>,
             ]}
             responseForm={
@@ -343,7 +387,6 @@ export default function Builder({ eventId, onBack }: BuilderProps) {
                   fields={fields}
                   guests={selectedGuests}
                   menus={menus}
-                  response={null}
                   choices={noChoices}
                   part="attendance"
                 />

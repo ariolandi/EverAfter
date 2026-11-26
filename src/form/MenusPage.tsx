@@ -23,7 +23,7 @@ export default function MenusPage({ menus, textColor, accentColor }: MenusPagePr
 
   return (
     <Stack ref={rootRef} sx={{ alignItems: 'center', color: textColor, gap: scaled(1) }}>
-      <Typography variant="metallic" component="h3" align="center" sx={{ fontSize: scaled(1.75), lineHeight: 1.2 }}>
+      <Typography variant="metallic" component="h3" align="center" sx={{ fontSize: scaled(2), lineHeight: 1.2 }}>
         Менюта
       </Typography>
       {/* Two columns, so more menus fit before the text has to shrink. */}

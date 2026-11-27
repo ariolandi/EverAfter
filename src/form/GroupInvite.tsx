@@ -50,6 +50,7 @@ export default function GroupInvite({ token, kind = 'group' }: { token: string; 
     accommodation: { ...choices.accommodation, ...recorded.accommodation },
     transport: { ...choices.transport, ...recorded.transport },
     roomWith: { ...choices.roomWith, ...recorded.roomWith },
+    notes: { ...choices.notes, ...recorded.notes },
   };
   // Guests who have answered are locked, and so are those who answered that they will not come.
   const locked = (guestId: number) =>
@@ -85,8 +86,10 @@ export default function GroupInvite({ token, kind = 'group' }: { token: string; 
             guests={invitation.guests}
             menus={invitation.menus}
             choices={shown.menus}
+            notes={shown.notes}
             isGuestDisabled={locked}
             onChange={(guestId, menuId) => update('menus', guestId, menuId)}
+            onNotesChange={(guestId, notes) => update('notes', guestId, notes || null)}
           />,
         ]
       : []),

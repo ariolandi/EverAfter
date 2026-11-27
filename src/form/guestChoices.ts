@@ -13,9 +13,11 @@ export interface GuestChoices {
     transport: Record<number, TransportDraft>;
     /** Who each guest would like to share a room with, by guest id. */
     roomWith: Record<number, string>;
+    /** Notes each guest left, e.g. about dietary restrictions, by guest id. */
+    notes: Record<number, string>;
 }
 
-export const noChoices: GuestChoices = { menus: {}, accommodation: {}, transport: {}, roomWith: {} };
+export const noChoices: GuestChoices = { menus: {}, accommodation: {}, transport: {}, roomWith: {}, notes: {} };
 
 export const ACCOMMODATION_LABELS = { yes: 'Ще се възползвам', no: 'Няма да се възползвам' } as const;
 
@@ -34,13 +36,14 @@ export const TRANSPORT_SHORT_LABELS: Record<Transport, string> = {
 
 /** The choices recorded in guests' sent answers (by guest id), so the choice pages can show them. */
 export function choicesFromResponses(responses: Record<number, GuestResponse>): GuestChoices {
-    const choices: GuestChoices = { menus: {}, accommodation: {}, transport: {}, roomWith: {} };
+    const choices: GuestChoices = { menus: {}, accommodation: {}, transport: {}, roomWith: {}, notes: {} };
     for (const [id, response] of Object.entries(responses)) {
         const guestId = Number(id);
         if (response.menuId !== null) choices.menus[guestId] = response.menuId;
         if (response.accommodation !== null) choices.accommodation[guestId] = response.accommodation;
         if (response.transport !== null) choices.transport[guestId] = response.transport;
         if (response.roomWith) choices.roomWith[guestId] = response.roomWith;
+        if (response.notes) choices.notes[guestId] = response.notes;
     }
     return choices;
 }
@@ -48,7 +51,7 @@ export function choicesFromResponses(responses: Record<number, GuestResponse>): 
 /** The lines that sum up a guest's choices next to their answer. */
 export function describeChoices(
     menus: Menu[],
-    choice: { menuId: number | null; accommodation: boolean | null; transport: TransportDraft | null; roomWith?: string | null },
+    choice: { menuId: number | null; accommodation: boolean | null; transport: TransportDraft | null; roomWith?: string | null; notes?: string | null },
 ): string[] {
     return [
         menus.find((m) => m.id === choice.menuId)?.name,
@@ -57,5 +60,6 @@ export function describeChoices(
             : `Нощувка: ${choice.accommodation ? 'ще се възползва' : 'няма да се възползва'}`,
         choice.roomWith ? `Споделя стая с: ${choice.roomWith}` : undefined,
         choice.transport && choice.transport !== 'none' ? TRANSPORT_LABELS[choice.transport] : undefined,
+        choice.notes ? `Бележка: ${choice.notes}` : undefined,
     ].filter((line): line is string => Boolean(line));
 }

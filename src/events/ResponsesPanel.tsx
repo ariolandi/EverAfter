@@ -103,6 +103,7 @@ export default function ResponsesPanel({ eventId, guests, invitation }: Response
                                 <TableCell>Група</TableCell>
                                 <TableCell>Присъствие</TableCell>
                                 <TableCell>Меню</TableCell>
+                                <TableCell>Бележки</TableCell>
                                 <TableCell>Нощувка</TableCell>
                                 <TableCell>Стая с</TableCell>
                                 <TableCell>Превоз</TableCell>
@@ -122,6 +123,9 @@ export default function ResponsesPanel({ eventId, guests, invitation }: Response
                                         <TableCell>{entry.groupName ?? '—'}</TableCell>
                                         <TableCell>{attendance(response, showAnswer)}</TableCell>
                                         <TableCell>{response ? menuName(response.menuId) : '—'}</TableCell>
+                                        <TableCell sx={{ minWidth: 160, maxWidth: 280, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                                            {response?.notes || '—'}
+                                        </TableCell>
                                         <TableCell>{yesNo(response?.accommodation ?? null)}</TableCell>
                                         <TableCell>{response?.roomWith || '—'}</TableCell>
                                         <TableCell>

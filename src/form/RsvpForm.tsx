@@ -139,6 +139,7 @@ function SingleForm({
   const accommodation = choices.accommodation[SELF_ID];
   const menuId = choices.menus[SELF_ID];
   const roomWith = accommodation ? choices.roomWith[SELF_ID]?.trim() : undefined;
+  const notes = choices.notes[SELF_ID]?.trim();
 
   const complete =
     (!fields.showName || name.trim() !== '') &&
@@ -155,6 +156,7 @@ function SingleForm({
           ...(picksMenu && { menuId }),
           ...(picksLogistics && { accommodation, transport }),
           ...(roomWith && { roomWith }),
+          ...(picksMenu && notes && { notes }),
         })),
   );
   const { submitting } = submission;
@@ -180,6 +182,7 @@ function SingleForm({
                 accommodation: picksLogistics ? (accommodation ?? null) : null,
                 transport: picksLogistics ? (choices.transport[SELF_ID] ?? null) : null,
                 roomWith: roomWith ?? null,
+                notes: picksMenu ? (notes ?? null) : null,
               }),
             },
           ]}
@@ -288,6 +291,7 @@ function GroupForm({
       accommodation: picksLogistics(g) ? (picked.accommodation[g.id] ?? null) : null,
       transport: picksLogistics(g) ? (picked.transport[g.id] ?? null) : null,
       roomWith: picksLogistics(g) && picked.accommodation[g.id] ? (picked.roomWith[g.id] ?? null) : null,
+      notes: picksMenu(g) ? (picked.notes[g.id]?.trim() || null) : null,
     }),
   }));
   const submission = useConfirmedSubmit(
@@ -300,6 +304,7 @@ function GroupForm({
             ...(fields.showAnswer && { answer: answers[g.id] }),
             ...(picksMenu(g) && { menuId: picked.menus[g.id] }),
             ...(picksLogistics(g) && { accommodation: picked.accommodation[g.id], transport: transportOf(g) }),
+            ...(picksMenu(g) && picked.notes[g.id]?.trim() && { notes: picked.notes[g.id].trim() }),
             ...(picksLogistics(g) && picked.accommodation[g.id] && picked.roomWith[g.id]?.trim() && { roomWith: picked.roomWith[g.id].trim() }),
           })),
         )),

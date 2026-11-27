@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MenuItem, Stack, TextField, Typography } from '@mui/material';
 import {
+    MAX_GUEST_NOTES_LENGTH,
     MAX_NAME_LENGTH,
     MAX_ROOM_WITH_LENGTH,
     menusForGuest,
@@ -44,6 +45,7 @@ export default function ResponseDialog({
     const [answer, setAnswer] = useState<boolean | null>(response?.answer ?? null);
     const [menuId, setMenuId] = useState<number | null>(response?.menuId ?? null);
     const [accommodation, setAccommodation] = useState<boolean | null>(response?.accommodation ?? null);
+    const [notes, setNotes] = useState(response?.notes ?? '');
     const [roomWith, setRoomWith] = useState(response?.roomWith ?? '');
     const [transport, setTransport] = useState<TransportDraft | null>(response?.transport ?? null);
     const saving = useAsyncAction();
@@ -72,6 +74,7 @@ export default function ResponseDialog({
                           accommodation: accommodation!,
                           // Sent even when empty, so a preference the organizer clears is cleared.
                           roomWith: accommodation ? roomWith.trim() : '',
+                          notes: notes.trim(),
                           transport: transport as Exclude<TransportDraft, 'none'>,
                       }
                     : { ...(editableName && { name: name.trim() }), answer: false },
@@ -128,6 +131,17 @@ export default function ResponseDialog({
                                 ))}
                             </TextField>
                         )}
+                        <TextField
+                            size="small"
+                            fullWidth
+                            multiline
+                            minRows={2}
+                            label="Бележки (напр. хранителни ограничения)"
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            disabled={saving.pending}
+                            slotProps={{ htmlInput: { maxLength: MAX_GUEST_NOTES_LENGTH } }}
+                        />
                         <Stack spacing={0.5}>
                             <Typography variant="subtitle2">Нощувка</Typography>
                             <AttendanceToggle

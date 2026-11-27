@@ -158,7 +158,7 @@ describe('POST /api/groups/:token/responses', () => {
     expect(res.body.guests).toEqual(after.guests);
     expect(createGuestResponses).toHaveBeenCalledWith(5, 10, [
       { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null, accommodation: true, transport: 'own' },
-      { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null, accommodation: null, transport: null, roomWith: null },
+      { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null, accommodation: null, transport: null, roomWith: null, notes: null },
     ]);
   });
 
@@ -248,7 +248,7 @@ describe('POST /api/groups/:token/responses', () => {
       expect(res.status).toBe(HttpStatus.CREATED);
       expect(createGuestResponses).toHaveBeenCalledWith(5, 10, [
         { guestId: 1, name: 'Иван Иванов', answer: true, menuId: null, accommodation: false, transport: 'arrangesOwn' },
-        { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null, accommodation: null, transport: null, roomWith: null },
+        { guestId: 2, name: 'Мария Иванова', answer: false, menuId: null, accommodation: null, transport: null, roomWith: null, notes: null },
       ]);
     });
 
@@ -312,7 +312,7 @@ describe('POST /api/groups/:token/responses', () => {
       const res = await post({ answers: [{ guestId: 1, answer: false, menuId: 21 }, coming(2, { menuId: 21 })] });
       expect(res.status).toBe(HttpStatus.CREATED);
       expect(createGuestResponses).toHaveBeenCalledWith(5, 10, [
-        { guestId: 1, name: 'Иван Иванов', answer: false, menuId: null, accommodation: null, transport: null, roomWith: null },
+        { guestId: 1, name: 'Иван Иванов', answer: false, menuId: null, accommodation: null, transport: null, roomWith: null, notes: null },
         { guestId: 2, name: 'Ники Иванов', answer: true, menuId: 21, accommodation: true, transport: 'own' },
       ]);
     });

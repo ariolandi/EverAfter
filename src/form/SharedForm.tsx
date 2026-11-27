@@ -55,8 +55,10 @@ export default function SharedForm({ slug }: { slug: string }) {
                       guests={guests}
                       menus={form.menus}
                       choices={draft.choices.menus}
+                      notes={draft.choices.notes}
                       isGuestDisabled={() => declined}
                       onChange={(_, menuId) => update('menus', menuId)}
+                      onNotesChange={(_, notes) => update('notes', notes || null)}
                   />,
               ]
             : []),

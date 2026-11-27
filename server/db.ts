@@ -409,6 +409,7 @@ const responseColumns = {
   accommodation: formResponses.accommodation,
   transport: formResponses.transport,
   roomWith: formResponses.roomWith,
+  notes: formResponses.notes,
   createdAt: formResponses.createdAt,
 };
 
@@ -422,6 +423,7 @@ type ResponseRow = {
   accommodation: boolean | null;
   transport: Transport | null;
   roomWith: string | null;
+  notes: string | null;
   createdAt: Date;
 };
 
@@ -432,6 +434,7 @@ const toGuestResponse = (row: ResponseRow): GuestResponse => ({
   accommodation: row.accommodation,
   transport: row.transport,
   roomWith: row.roomWith,
+  notes: row.notes,
 });
 
 /** The guests' answers to an invitation, by guest id; answers to a deleted invitation went with it. */
@@ -492,6 +495,7 @@ export async function listGroups(eventId: number): Promise<GuestGroup[]> {
                 accommodation: row.accommodation,
                 transport: row.transport,
                 roomWith: row.roomWith,
+                notes: row.notes,
               })),
             },
       createdAt: group.createdAt.toISOString(),
@@ -656,6 +660,7 @@ export interface GuestAnswerRow {
   accommodation: boolean | null;
   transport: Transport | null;
   roomWith?: string | null;
+  notes?: string | null;
 }
 
 /**

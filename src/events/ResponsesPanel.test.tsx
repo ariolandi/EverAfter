@@ -112,6 +112,7 @@ describe('ResponsesPanel', () => {
             menuId: 20,
             accommodation: false,
             roomWith: '',
+            notes: '',
             transport: 'own',
         });
         expect(api.listResponses).toHaveBeenCalledTimes(2);

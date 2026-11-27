@@ -75,6 +75,9 @@ export default function MenusPage({ menus, textColor, accentColor }: MenusPagePr
           </Stack>
         ))}
       </Box>
+      <Typography align="center" sx={{ fontSize: scaled(0.65), fontStyle: 'italic', opacity: 0.8 }}>
+        Менютата могат да бъдат променени.
+      </Typography>
     </Stack>
   );
 }

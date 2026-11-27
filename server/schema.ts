@@ -209,6 +209,8 @@ export const formResponses = pgTable(
     transport: text('transport').$type<Transport>(),
     // Who the guest would like to share a room with, if they said.
     roomWith: text('room_with'),
+    // Notes from the guest, e.g. about dietary restrictions.
+    notes: text('notes'),
     createdAt: createdAt(),
   },
   (t) => [

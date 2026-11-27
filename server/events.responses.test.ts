@@ -120,6 +120,7 @@ describe('PUT /api/events/:id/guests/:guestId/response', () => {
       accommodation: null,
       transport: null,
       roomWith: null,
+      notes: null,
     });
   });
 

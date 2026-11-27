@@ -82,6 +82,9 @@ export const MAX_NAME_LENGTH = 100;
 /** Longest name of who a guest would like to share a room with. */
 export const MAX_ROOM_WITH_LENGTH = MAX_NAME_LENGTH;
 
+/** Longest note a guest can leave about themselves, e.g. on dietary restrictions. */
+export const MAX_GUEST_NOTES_LENGTH = MAX_NOTES_LENGTH;
+
 export const MAX_PLACE_LENGTH = 200;
 
 export const MAX_DISH_LENGTH = 200;
@@ -201,6 +204,8 @@ export interface FormResponseInput {
   transport?: Transport;
   /** Who the guest would like to share a room with. */
   roomWith?: string;
+  /** Notes from the guest, e.g. about dietary restrictions. */
+  notes?: string;
 }
 
 /** One guest's answer, sent from a group's link or their own, or entered by an organizer. */
@@ -223,6 +228,8 @@ export interface GroupGuestAnswer {
   transport?: Transport;
   /** Name of who the guest would like to share a room with; only asked of guests invited on their own. */
   roomWith?: string;
+  /** Notes from the guest, e.g. about dietary restrictions. */
+  notes?: string;
 }
 
 export interface GroupResponseInput {
@@ -253,6 +260,8 @@ export interface GuestResponse {
   transport: Transport | null;
   /** Who the guest would like to share a room with; null when not given. */
   roomWith?: string | null;
+  /** Notes from the guest, e.g. about dietary restrictions; null when not given. */
+  notes?: string | null;
 }
 
 /** A group's answers, as far as its guests have answered. */

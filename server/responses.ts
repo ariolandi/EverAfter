@@ -1,4 +1,4 @@
-import { MAX_ROOM_WITH_LENGTH, menusForGuest, TRANSPORT_OPTIONS, type Menu, type Transport } from '../shared/types.js';
+import { MAX_GUEST_NOTES_LENGTH, MAX_ROOM_WITH_LENGTH, menusForGuest, TRANSPORT_OPTIONS, type Menu, type Transport } from '../shared/types.js';
 
 /** The recorded form of one guest's answer. */
 export interface ParsedAnswer {
@@ -8,6 +8,8 @@ export interface ParsedAnswer {
   transport: Transport | null;
   /** Left out (and so left as it was when an answer is replaced) unless the answer says who to share a room with. */
   roomWith?: string | null;
+  /** Left out (and so left as it was) unless the answer carries notes. */
+  notes?: string | null;
 }
 
 type Parsed = { ok: true; values: ParsedAnswer } | { ok: false; error: string };
@@ -20,7 +22,7 @@ type Parsed = { ok: true; values: ParsedAnswer } | { ok: false; error: string };
 export function parseGuestAnswer(
   guest: { name: string; isChild: boolean },
   context: { showAnswer: boolean; menus: Menu[] },
-  raw: { answer?: unknown; menuId?: unknown; accommodation?: unknown; transport?: unknown; roomWith?: unknown },
+  raw: { answer?: unknown; menuId?: unknown; accommodation?: unknown; transport?: unknown; roomWith?: unknown; notes?: unknown },
 ): Parsed {
   const { showAnswer, menus } = context;
   if (showAnswer && typeof raw.answer !== 'boolean') {
@@ -28,7 +30,7 @@ export function parseGuestAnswer(
   }
   const answer = showAnswer ? (raw.answer as boolean) : null;
   if (answer === false) {
-    return { ok: true, values: { answer, menuId: null, accommodation: null, transport: null, roomWith: null } };
+    return { ok: true, values: { answer, menuId: null, accommodation: null, transport: null, roomWith: null, notes: null } };
   }
   // Children's menus are for children only.
   const options = menusForGuest(menus, guest.isChild);
@@ -50,6 +52,13 @@ export function parseGuestAnswer(
     // Only guests who stay the night share a room.
     if (!raw.accommodation) roomWith = null;
   }
+  let notes: string | null | undefined;
+  if (raw.notes !== undefined) {
+    notes = typeof raw.notes === 'string' ? raw.notes.trim() || null : null;
+    if (typeof raw.notes !== 'string' || (notes?.length ?? 0) > MAX_GUEST_NOTES_LENGTH) {
+      return { ok: false, error: `notes must be at most ${MAX_GUEST_NOTES_LENGTH} characters` };
+    }
+  }
   return {
     ok: true,
     values: {
@@ -58,6 +67,7 @@ export function parseGuestAnswer(
       accommodation: raw.accommodation,
       transport: raw.transport as Transport,
       ...(roomWith !== undefined && { roomWith }),
+      ...(notes !== undefined && { notes }),
     },
   };
 }
